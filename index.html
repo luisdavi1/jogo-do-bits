@@ -1,0 +1,4183 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Cyber Surf: Corrida da Informática</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #040b16;
+      font-family: 'Fredoka', 'JetBrains Mono', sans-serif;
+      touch-action: none;
+    }
+    .font-code {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .arcade-shadow {
+      text-shadow: 0 3px 0 rgba(0, 0, 0, 0.55), 0 0 14px rgba(0, 0, 0, 0.35);
+    }
+    .btn-3d {
+      transition: transform 0.1s ease, filter 0.15s ease;
+      box-shadow: 0 5px 0 rgba(0, 0, 0, 0.4), 0 8px 18px rgba(0, 0, 0, 0.28);
+    }
+    .btn-3d:active {
+      transform: translateY(4px);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+    }
+    .glass-panel {
+      background: rgba(10, 18, 34, 0.84);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 2px solid rgba(56, 189, 248, 0.25);
+    }
+    @keyframes pulseScale {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    .animate-pulse-scale {
+      animation: pulseScale 1.6s infinite ease-in-out;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(20px) scale(0.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .animate-modal {
+      animation: slideUp 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+    @keyframes floatUpFade {
+      0% { opacity: 1; transform: translate(-50%, 0) scale(0.85); }
+      30% { opacity: 1; transform: translate(-50%, -22px) scale(1.1); }
+      100% { opacity: 0; transform: translate(-50%, -58px) scale(0.95); }
+    }
+    .floating-popup {
+      position: fixed;
+      pointer-events: none;
+      z-index: 35;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 900;
+      text-shadow: 0 2px 6px rgba(0,0,0,0.85);
+      animation: floatUpFade 0.85s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes boxShake {
+      0%, 100% { transform: rotate(0deg) scale(1); }
+      20% { transform: rotate(-10deg) scale(1.08); }
+      40% { transform: rotate(10deg) scale(1.12); }
+      60% { transform: rotate(-8deg) scale(1.08); }
+      80% { transform: rotate(8deg) scale(1.05); }
+    }
+    .animate-loot-shake {
+      animation: boxShake 0.65s ease-in-out infinite;
+    }
+    /* Custom scrollbar for shop modal */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(56, 189, 248, 0.35);
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <!-- Floating Score / Bit Popups Layer -->
+    <div id="floating-popups-layer" class="pointer-events-none fixed inset-0 z-35 overflow-hidden"></div>
+
+    <!-- Toast / Notification Banner -->
+    <div id="toast-banner" class="pointer-events-none fixed top-24 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 opacity-0 -translate-y-4">
+      <div id="toast-text" class="px-5 py-2 rounded-full bg-gradient-to-r from-cyan-400 to-emerald-400 text-slate-950 font-extrabold text-xs sm:text-base shadow-xl border-2 border-white font-code whitespace-nowrap">
+        Placa-Mãe RGB Ativada!
+      </div>
+    </div>
+
+    <!-- HUD (Visible during active run) -->
+    <div id="hud" class="hidden pointer-events-none fixed inset-0 z-20 p-3 sm:p-5 flex flex-col justify-between">
+      <!-- Top Bar -->
+      <div class="flex items-start justify-between gap-2">
+        <!-- Left: Pause + Hoverboard + Word Challenge -->
+        <div class="flex flex-col gap-2 pointer-events-auto">
+          <div class="flex items-center gap-2">
+            <button id="btn-pause" aria-label="Pausar" class="btn-3d w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-slate-900/90 border-2 border-cyan-400/45 text-cyan-300 flex items-center justify-center hover:bg-slate-800">
+              <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M6 5h4v14H6V5zm8 0h4v14h-4V5z"/></svg>
+            </button>
+            <button id="btn-hoverboard-hud" aria-label="Ativar Prancha Cyber" class="btn-3d px-3 h-11 sm:h-12 rounded-2xl bg-gradient-to-r from-cyan-500 to-emerald-500 border-2 border-cyan-200/80 text-slate-950 font-extrabold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg">
+              <span id="hud-board-icon">⌨️</span>
+              <span id="hud-board-name" class="hidden sm:inline">Placa RGB</span>
+              <span id="hud-board-count" class="bg-slate-950/85 px-2 py-0.5 rounded-full text-cyan-300 font-code">Pronta</span>
+            </button>
+          </div>
+
+          <!-- Daily Word Hunt HUD + Zone Badge -->
+          <div class="flex items-center gap-2 pointer-events-none">
+            <div id="hud-word-box" class="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-950/85 border border-cyan-400/35 shadow-md font-code"></div>
+          <div id="hud-zone-badge" class="hidden sm:inline-block px-2.5 py-1 rounded-xl bg-slate-950/80 border border-emerald-400/35 text-[11px] font-bold text-emerald-300 font-code">
+            Placa-Mãe Esmeralda
+          </div>
+          <div id="hud-boss-wave" class="hidden px-2.5 py-1 rounded-xl bg-rose-950/90 border border-rose-400/80 text-[11px] font-extrabold text-rose-200 font-code animate-pulse">
+            🔥 ONDA FIREWALL <span id="hud-boss-timer">14s</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center/Right: Score, Permanent Multiplier & Bits -->
+        <div class="flex flex-col items-end gap-1.5">
+          <div class="flex items-center gap-2">
+            <!-- Multiplier Badge -->
+            <div id="hud-multiplier-box" class="px-3 py-1 rounded-xl bg-gradient-to-br from-emerald-400 to-cyan-500 border-2 border-white/60 text-slate-950 font-black text-sm sm:text-lg shadow-md transition-transform font-code">
+              <span id="hud-multiplier">x1</span>
+            </div>
+            <!-- Score Box -->
+            <div class="px-4 py-1 rounded-xl bg-slate-950/90 border-2 border-cyan-400/45 text-cyan-200 font-extrabold text-lg sm:text-2xl tracking-wider arcade-shadow min-w-[120px] sm:min-w-[160px] text-right font-code">
+              <span id="hud-score">000000</span>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <!-- Mystery Zip Boxes Collected in Run -->
+            <div id="hud-zip-badge" class="hidden items-center gap-1 px-2.5 py-1 rounded-xl bg-purple-950/90 border border-purple-400/60 text-purple-200 font-extrabold text-xs sm:text-sm shadow-md font-code">
+              <span>📦</span>
+              <span id="hud-zip-count">0</span>
+            </div>
+
+            <!-- Bits Counter -->
+            <div class="flex items-center gap-2 px-3.5 py-1 rounded-xl bg-slate-950/90 border-2 border-amber-400/60 text-amber-300 font-extrabold text-sm sm:text-lg shadow-md font-code">
+              <span class="inline-flex w-5 h-5 rounded-full bg-gradient-to-tr from-amber-500 to-yellow-300 border border-yellow-100 shadow-inner items-center justify-center text-[10px] text-amber-950 font-black">01</span>
+              <span id="hud-coins">0</span>
+              <span class="text-[11px] text-amber-200/80">BITS</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Powerups Bars (Bottom Left) -->
+      <div id="powerup-timers" class="flex flex-col gap-2 max-w-[220px] sm:max-w-[260px]"></div>
+    </div>
+
+    <!-- START / HOME OVERLAY -->
+    <div id="start-screen" class="fixed inset-0 z-30 flex flex-col justify-between p-4 sm:p-8 bg-gradient-to-b from-slate-950/50 via-transparent to-slate-950/85">
+      <!-- Top Header Stats -->
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+          <!-- Total Bits -->
+          <div class="glass-panel px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-2xl flex items-center gap-2 shadow-lg">
+            <span class="w-6 h-6 rounded-full bg-gradient-to-tr from-amber-500 to-yellow-300 border-2 border-white flex items-center justify-center text-[10px] font-black text-amber-950 font-code">01</span>
+            <div>
+              <div class="text-[10px] uppercase tracking-wider text-cyan-300/80 leading-none font-code">Saldo</div>
+              <div id="menu-total-coins" class="text-amber-300 font-extrabold text-sm sm:text-lg leading-tight font-code">0</div>
+            </div>
+          </div>
+          <!-- High Score -->
+          <div class="glass-panel px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-2xl flex items-center gap-2 shadow-lg">
+            <span class="text-lg sm:text-xl">🏆</span>
+            <div>
+              <div class="text-[10px] uppercase tracking-wider text-cyan-300/80 leading-none font-code">Recorde</div>
+              <div id="menu-high-score" class="text-white font-extrabold text-sm sm:text-lg leading-tight font-code">0</div>
+            </div>
+          </div>
+          <!-- Permanent Multiplier -->
+          <div class="glass-panel px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-2xl flex items-center gap-2 shadow-lg">
+            <span class="text-lg sm:text-xl">⚡</span>
+            <div>
+              <div class="text-[10px] uppercase tracking-wider text-emerald-300/80 leading-none font-code">Mult. Base</div>
+              <div id="menu-perm-mult" class="text-emerald-300 font-extrabold text-sm sm:text-lg leading-tight font-code">x1</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Audio Toggle -->
+        <button id="btn-audio" aria-label="Alternar Som" class="btn-3d w-11 h-11 sm:w-12 sm:h-12 rounded-2xl glass-panel text-white flex items-center justify-center text-xl hover:bg-slate-800/80 shrink-0">
+          🔊
+        </button>
+      </div>
+
+      <!-- Center Title & Character Preview Hint -->
+      <div class="flex flex-col items-center text-center my-auto pointer-events-none">
+        <div class="inline-block px-3.5 py-1 rounded-full bg-cyan-400 text-slate-950 font-extrabold text-xs sm:text-sm uppercase tracking-widest mb-2 shadow-md transform -rotate-2 font-code">
+          &lt;DATACENTER_RUNNER_PRO /&gt;
+        </div>
+        <h1 class="text-5xl sm:text-7xl font-extrabold text-transparent bg-clip-text bg-gradient-to-b from-cyan-300 via-emerald-400 to-blue-500 drop-shadow-[0_6px_0_rgba(2,6,23,0.98)] tracking-tight leading-none">
+          CYBER<br/>SURF 3D
+        </h1>
+        <p class="text-xs sm:text-sm text-cyan-200/95 font-bold tracking-wider uppercase mt-1 font-code">
+          Corrida da Informática
+        </p>
+        <div class="mt-2.5 flex flex-wrap items-center justify-center gap-2">
+          <span id="selected-char-badge" class="px-3.5 py-1 rounded-full bg-slate-950/85 border border-cyan-400/40 text-emerald-300 font-bold text-xs shadow font-code">
+            Avatar: Dev Luis
+          </span>
+          <span id="selected-board-badge" class="px-3.5 py-1 rounded-full bg-slate-950/85 border border-purple-400/40 text-cyan-300 font-bold text-xs shadow font-code">
+            Prancha: Placa-Mãe RGB
+          </span>
+          <button id="btn-cycle-zone" type="button" class="pointer-events-auto px-3.5 py-1 rounded-full bg-slate-950/85 hover:bg-slate-900 border border-emerald-400/45 text-amber-300 font-bold text-xs shadow font-code transition cursor-pointer">
+            🌐 Zona: Placa-Mãe Esmeralda
+          </button>
+        </div>
+      </div>
+
+      <!-- Bottom Action Buttons -->
+      <div class="flex flex-col items-center gap-3 w-full max-w-lg mx-auto">
+        <button id="btn-play" class="btn-3d animate-pulse-scale w-full py-4 sm:py-5 rounded-3xl bg-gradient-to-r from-cyan-400 via-emerald-400 to-teal-400 border-4 border-white text-slate-950 font-black text-xl sm:text-3xl tracking-wide uppercase shadow-2xl cursor-pointer">
+          ▶ INICIAR EXECUÇÃO
+        </button>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-full">
+          <button id="btn-open-chars" class="btn-3d py-2.5 px-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 border-2 border-cyan-300/60 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5">
+            <span>👨‍💻</span> Avatares
+          </button>
+          <button id="btn-open-boards" class="btn-3d py-2.5 px-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-700 border-2 border-purple-300/60 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5">
+            <span>🛹</span> Pranchas
+          </button>
+          <button id="btn-open-missions" class="btn-3d py-2.5 px-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 border-2 border-amber-200/70 text-slate-950 font-extrabold text-xs sm:text-sm flex items-center justify-center gap-1.5 relative">
+            <span>🎯</span> Missões
+            <span id="missions-ready-dot" class="hidden absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-rose-500 border-2 border-white animate-bounce"></span>
+          </button>
+          <button id="btn-open-shop" class="btn-3d py-2.5 px-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 border-2 border-emerald-300/60 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5">
+            <span>⚙️</span> Hardware
+          </button>
+        </div>
+        <button id="btn-open-trophies" class="btn-3d w-full py-2.5 px-4 rounded-2xl bg-gradient-to-r from-yellow-400 via-amber-400 to-orange-400 border-2 border-white/80 text-slate-950 font-black text-xs sm:text-sm flex items-center justify-center gap-2 relative">
+          <span>🏆</span> CONQUISTAS & TROFÉUS DE CARREIRA
+          <span id="trophies-ready-dot" class="hidden px-2 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-code animate-pulse">RESGATAR</span>
+        </button>
+
+        <div class="text-cyan-100/90 text-[11px] sm:text-xs text-center font-medium bg-slate-950/75 border border-cyan-500/25 px-4 py-1.5 rounded-full backdrop-blur-sm">
+          Deslize ou <span class="text-amber-300 font-bold">Setas / WASD</span> • Deslizar no ar = <span class="text-emerald-300 font-bold">Queda Rápida</span> • <span class="text-cyan-300 font-bold">2x Toque / Espaço</span> = Prancha
+        </div>
+      </div>
+    </div>
+
+    <!-- PAUSE MODAL -->
+    <div id="pause-screen" class="hidden fixed inset-0 z-40 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+      <div class="glass-panel border-cyan-400/40 animate-modal w-full max-w-sm rounded-3xl p-6 text-center text-white shadow-2xl">
+        <h2 class="text-3xl font-extrabold text-cyan-300 mb-2 font-code">PROCESSO PAUSADO</h2>
+        <p class="text-slate-300 text-sm mb-6">Aguardando instrução para retomar o barramento...</p>
+        <div class="flex flex-col gap-3">
+          <button id="btn-resume" class="btn-3d w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-400 to-cyan-500 border-2 border-white text-slate-950 font-extrabold text-lg">
+            ▶ RETOMAR SISTEMA
+          </button>
+          <button id="btn-restart-pause" class="btn-3d w-full py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 border-2 border-white/50 text-white font-bold text-base">
+            ↻ REINICIAR SCRIPT
+          </button>
+          <button id="btn-home-pause" class="btn-3d w-full py-3 rounded-2xl bg-slate-800 border-2 border-white/20 text-slate-200 font-bold text-base">
+            🏠 TERMINAL INICIAL
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- GAME OVER MODAL -->
+    <div id="gameover-screen" class="hidden fixed inset-0 z-40 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+      <div class="glass-panel border-rose-500/40 animate-modal w-full max-w-md rounded-3xl p-6 sm:p-7 text-center text-white shadow-2xl relative overflow-hidden">
+        <div id="new-record-badge" class="hidden mb-2 inline-block px-4 py-1 rounded-full bg-gradient-to-r from-cyan-300 via-emerald-400 to-amber-300 text-slate-950 font-black text-xs sm:text-sm uppercase tracking-wider shadow-lg animate-bounce font-code">
+          ★ NOVO BENCHMARK! ★
+        </div>
+        <h2 class="text-3xl sm:text-4xl font-extrabold text-rose-400 arcade-shadow mb-1 font-code">SYSTEM CRASH!</h2>
+        <p id="gameover-reason" class="text-slate-300 text-sm mb-4">O Antivírus bloqueou sua conexão!</p>
+
+        <!-- Mystery Zip Box Unlocker Banner (Appears if collected during run) -->
+        <div id="go-loot-section" class="hidden mb-4 p-3.5 rounded-2xl bg-gradient-to-r from-purple-900/90 to-indigo-900/90 border-2 border-purple-400 shadow-lg">
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3 text-left">
+              <div id="go-loot-icon" class="text-3xl animate-loot-shake">📦</div>
+              <div>
+                <div class="text-xs uppercase font-bold text-purple-300 font-code">Pacote .ZIP Capturado!</div>
+                <div id="go-loot-desc" class="text-sm font-extrabold text-white">Você encontrou <span id="go-loot-count">1</span> Caixa Misteriosa</div>
+              </div>
+            </div>
+            <button id="btn-open-loot" class="btn-3d px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-300 text-slate-950 font-black text-xs uppercase font-code shrink-0">
+              Extrair ZIP
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 mb-5 font-code">
+          <div class="bg-slate-900/90 border border-cyan-400/25 rounded-2xl p-3">
+            <div class="text-xs uppercase text-slate-400 font-bold">Pontuação</div>
+            <div id="go-score" class="text-2xl sm:text-3xl font-black text-white mt-0.5">0</div>
+          </div>
+          <div class="bg-slate-900/90 border border-amber-400/40 rounded-2xl p-3">
+            <div class="text-xs uppercase text-amber-300/80 font-bold">Bits Minerados</div>
+            <div id="go-coins" class="text-2xl sm:text-3xl font-black text-amber-300 mt-0.5">+0</div>
+          </div>
+          <div class="bg-slate-900/90 border border-white/15 rounded-2xl p-2.5">
+            <div class="text-[11px] uppercase text-slate-400 font-bold">Melhor Recorde</div>
+            <div id="go-best" class="text-lg font-extrabold text-cyan-300">0</div>
+          </div>
+          <div class="bg-slate-900/90 border border-white/15 rounded-2xl p-2.5">
+            <div class="text-[11px] uppercase text-slate-400 font-bold">Total de Bits</div>
+            <div id="go-total-coins" class="text-lg font-extrabold text-amber-300">0</div>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-3">
+          <button id="btn-play-again" class="btn-3d w-full py-4 rounded-2xl bg-gradient-to-r from-cyan-400 via-emerald-400 to-teal-400 border-3 border-white text-slate-950 font-black text-xl uppercase tracking-wide">
+            ↻ EXECUTAR NOVAMENTE
+          </button>
+          <div class="grid grid-cols-3 gap-2">
+            <button id="btn-go-missions" class="btn-3d py-2.5 rounded-xl bg-amber-400 border border-white/40 text-slate-950 font-extrabold text-xs sm:text-sm">
+              🎯 Missões
+            </button>
+            <button id="btn-go-shop" class="btn-3d py-2.5 rounded-xl bg-emerald-500/90 border border-white/40 text-slate-950 font-extrabold text-xs sm:text-sm">
+              ⚙️ Hardware
+            </button>
+            <button id="btn-go-home" class="btn-3d py-2.5 rounded-xl bg-slate-800 border border-white/20 text-white font-bold text-xs sm:text-sm">
+              🏠 Início
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CHARACTERS MODAL -->
+    <div id="chars-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+      <div class="glass-panel border-cyan-400/40 animate-modal w-full max-w-lg rounded-3xl p-5 sm:p-6 text-white shadow-2xl max-h-[90vh] flex flex-col">
+        <div class="flex items-center justify-between pb-3 border-b border-white/15">
+          <div>
+            <h3 class="text-2xl font-extrabold text-cyan-300">AVATARES DE TI</h3>
+            <p class="text-xs text-slate-300">Selecione seu perfil para navegar nos barramentos</p>
+          </div>
+          <button id="btn-close-chars" class="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center font-bold text-lg">✕</button>
+        </div>
+        <div id="chars-list" class="grid grid-cols-1 sm:grid-cols-3 gap-3 my-4 overflow-y-auto pr-1"></div>
+        <div class="pt-2 border-t border-white/15 flex items-center justify-between text-sm font-code">
+          <span class="text-slate-300">Saldo de Bits:</span>
+          <span id="chars-modal-coins" class="font-extrabold text-amber-300 text-lg">0 BITS</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- HOVERBOARDS SHOWCASE MODAL -->
+    <div id="boards-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+      <div class="glass-panel border-purple-400/40 animate-modal w-full max-w-lg rounded-3xl p-5 sm:p-6 text-white shadow-2xl max-h-[90vh] flex flex-col">
+        <div class="flex items-center justify-between pb-3 border-b border-white/15">
+          <div>
+            <h3 class="text-2xl font-extrabold text-purple-300">PRANCHAS CYBER</h3>
+            <p class="text-xs text-slate-300">Ative com 2x Toque ou Espaço para escudo anti-crash</p>
+          </div>
+          <button id="btn-close-boards" class="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center font-bold text-lg">✕</button>
+        </div>
+        <div id="boards-list" class="grid grid-cols-1 sm:grid-cols-3 gap-3 my-4 overflow-y-auto pr-1"></div>
+        <div class="pt-2 border-t border-white/15 flex items-center justify-between text-sm font-code">
+          <span class="text-slate-300">Saldo de Bits:</span>
+          <span id="boards-modal-coins" class="font-extrabold text-amber-300 text-lg">0 BITS</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- MISSIONS & PERMANENT MULTIPLIER MODAL -->
+    <div id="missions-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+      <div class="glass-panel border-amber-400/40 animate-modal w-full max-w-lg rounded-3xl p-5 sm:p-6 text-white shadow-2xl max-h-[90vh] flex flex-col">
+        <div class="flex items-center justify-between pb-3 border-b border-white/15">
+          <div>
+            <h3 class="text-2xl font-extrabold text-amber-300">MISSÕES DE SISTEMA</h3>
+            <p class="text-xs text-slate-300">Complete conjuntos de 3 missões para subir o Multiplicador Permanente!</p>
+          </div>
+          <button id="btn-close-missions" class="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center font-bold text-lg">✕</button>
+        </div>
+        <div id="missions-list" class="flex flex-col gap-3 my-4 overflow-y-auto pr-1"></div>
+        <div class="pt-2 border-t border-white/15 flex items-center justify-between text-sm font-code">
+          <span class="text-slate-300">Multiplicador Permanente:</span>
+          <span id="missions-modal-mult" class="font-extrabold text-emerald-300 text-lg">x1 / x10</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- UPGRADES SHOP MODAL -->
+    <div id="shop-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+      <div class="glass-panel border-emerald-400/40 animate-modal w-full max-w-lg rounded-3xl p-5 sm:p-6 text-white shadow-2xl max-h-[90vh] flex flex-col">
+        <div class="flex items-center justify-between pb-3 border-b border-white/15">
+          <div>
+            <h3 class="text-2xl font-extrabold text-emerald-300">UPGRADES DE HARDWARE</h3>
+            <p class="text-xs text-slate-300">Otimize a duração dos seus módulos de sistema</p>
+          </div>
+          <button id="btn-close-shop" class="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center font-bold text-lg">✕</button>
+        </div>
+        <div id="upgrades-list" class="flex flex-col gap-3 my-4 overflow-y-auto pr-1"></div>
+        <div class="pt-2 border-t border-white/15 flex items-center justify-between text-sm font-code">
+          <span class="text-slate-300">Saldo de Bits:</span>
+          <span id="shop-modal-coins" class="font-extrabold text-amber-300 text-lg">0 BITS</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CAREER TROPHIES / ACHIEVEMENTS MODAL -->
+    <div id="trophies-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+      <div class="glass-panel border-yellow-400/45 animate-modal w-full max-w-lg rounded-3xl p-5 sm:p-6 text-white shadow-2xl max-h-[90vh] flex flex-col">
+        <div class="flex items-center justify-between pb-3 border-b border-white/15">
+          <div>
+            <h3 class="text-2xl font-extrabold text-yellow-300">TROFÉUS DE CARREIRA</h3>
+            <p class="text-xs text-slate-300">Metas de longo prazo com badges e recompensas extras em Bits</p>
+          </div>
+          <button id="btn-close-trophies" class="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center font-bold text-lg">✕</button>
+        </div>
+        <div id="trophies-list" class="flex flex-col gap-3 my-4 overflow-y-auto pr-1"></div>
+        <div class="pt-2 border-t border-white/15 flex items-center justify-between text-sm font-code">
+          <span class="text-slate-300">Saldo de Bits:</span>
+          <span id="trophies-modal-coins" class="font-extrabold text-amber-300 text-lg">0 BITS</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * ============================================================================
+     * CYBER SURF 3D: CORRIDA DA INFORMÁTICA (PRO EDITION)
+     * Three.js Datacenter Endless Runner + Dynamic Hardware Biomes + Missions + Loot
+     * ============================================================================
+     */
+
+    // ----------------------------------------------------------------------------
+    // 1. PERSISTENCE, BIOMES, AVATARS, HOVERBOARDS & MISSIONS CONFIGURATION
+    // ----------------------------------------------------------------------------
+    const STORAGE_KEY = 'cyber_surf_it_save_v2';
+
+    const ZONES_DATA = [
+      {
+        name: 'Placa-Mãe Esmeralda',
+        minDist: 0,
+        bg: 0x040b16,
+        fog: 0x061326,
+        hemiSky: 0x38bdf8,
+        hemiGround: 0x064e3b,
+        trackTint: 0xffffff,
+        neonColor: 0x38bdf8
+      },
+      {
+        name: 'Núcleo Overclock',
+        minDist: 800,
+        bg: 0x1a0605,
+        fog: 0x2b0b07,
+        hemiSky: 0xf97316,
+        hemiGround: 0x7f1d1d,
+        trackTint: 0xffedd5,
+        neonColor: 0xf97316
+      },
+      {
+        name: 'Nuvem Quântica',
+        minDist: 1800,
+        bg: 0x0c0624,
+        fog: 0x170b3b,
+        hemiSky: 0xc084fc,
+        hemiGround: 0x1e1b4b,
+        trackTint: 0xe0e7ff,
+        neonColor: 0xa855f7
+      },
+      {
+        name: 'Deep Web Matrix',
+        minDist: 3000,
+        bg: 0x010a04,
+        fog: 0x031709,
+        hemiSky: 0x4ade80,
+        hemiGround: 0x052e16,
+        trackTint: 0xdcfce7,
+        neonColor: 0x22c55e
+      }
+    ];
+
+    const CHARACTERS_DATA = [
+      {
+        id: 'dev_jr',
+        name: 'Dev Luis',
+        tag: 'Full-Stack',
+        desc: 'Moletom tech azul, headset gamer e tênis de código.',
+        cost: 0,
+        colors: { skin: 0xffccaa, hat: 0x0284c7, shirt: 0x1d4ed8, hoodie: 0x38bdf8, pants: 0x0f172a, shoes: 0x22d3ee, accent: 0x38bdf8 },
+        style: 'headset'
+      },
+      {
+        id: 'hacker_neon',
+        name: 'Hacker Neon',
+        tag: 'Matrix Ops',
+        desc: 'Capuz cibernético verde Matrix e visor de criptografia.',
+        cost: 250,
+        colors: { skin: 0xe2e8f0, hat: 0x064e3b, shirt: 0x059669, hoodie: 0x10b981, pants: 0x020617, shoes: 0x4ade80, accent: 0x4ade80 },
+        style: 'hood_visor'
+      },
+      {
+        id: 'sysadmin_root',
+        name: 'SysAdmin Root',
+        tag: 'Superusuário',
+        desc: 'Armadura de servidor dourada/vermelha com núcleo nuclear.',
+        cost: 600,
+        colors: { skin: 0xd97706, hat: 0xdc2626, shirt: 0x991b1b, hoodie: 0xfacc15, pants: 0x1e1b4b, shoes: 0xf59e0b, accent: 0xfacc15 },
+        style: 'root_helmet'
+      }
+    ];
+
+    const BOARDS_DATA = [
+      {
+        id: 'pcb_rgb',
+        name: 'Placa-Mãe RGB',
+        icon: '⌨️',
+        tag: 'Clássica',
+        desc: 'Circuito impresso com trilhas de cobre e LED ciano.',
+        cost: 0,
+        deckColor: 0x059669,
+        trimColor: 0x22d3ee,
+        duration: 18
+      },
+      {
+        id: 'mech_neon',
+        name: 'Teclado Mecânico',
+        icon: '🎹',
+        tag: 'Switch Azul',
+        desc: 'Teclas iluminadas RGB com escudo estendido de 22s.',
+        cost: 300,
+        deckColor: 0x312e81,
+        trimColor: 0xf472b6,
+        duration: 22
+      },
+      {
+        id: 'rtx_turbo',
+        name: 'GPU RTX Turbo',
+        icon: '🚀',
+        tag: 'Triple-Fan',
+        desc: 'Placa de vídeo extrema com 26s de proteção máxima.',
+        cost: 750,
+        deckColor: 0x111827,
+        trimColor: 0xfacc15,
+        duration: 26
+      }
+    ];
+
+    const UPGRADES_DATA = [
+      {
+        id: 'jetpack',
+        name: 'Overclock Fibra Óptica',
+        icon: '🚀',
+        desc: 'Voe em velocidade da luz sobre os servidores coletando Bits.',
+        baseDuration: 8,
+        perLevel: 2,
+        maxLevel: 5,
+        costs: [100, 250, 500, 900, 1500]
+      },
+      {
+        id: 'sneakers',
+        name: 'Botas Ping 0ms',
+        icon: '⚡',
+        desc: 'Latência zero para saltar direto no topo dos racks.',
+        baseDuration: 10,
+        perLevel: 2.5,
+        maxLevel: 5,
+        costs: [100, 250, 500, 900, 1500]
+      },
+      {
+        id: 'magnet',
+        name: 'Algoritmo Indexador',
+        icon: '🧲',
+        desc: 'Busca e atrai todos os Bits das 3 trilhas automaticamente.',
+        baseDuration: 10,
+        perLevel: 2.5,
+        maxLevel: 5,
+        costs: [100, 250, 500, 900, 1500]
+      },
+      {
+        id: 'multiplier',
+        name: 'Dual-Core 2x',
+        icon: '💎',
+        desc: 'Processamento paralelo que dobra todos os seus pontos.',
+        baseDuration: 10,
+        perLevel: 2.5,
+        maxLevel: 5,
+        costs: [120, 300, 600, 1000, 1600]
+      }
+    ];
+
+    const MISSION_TEMPLATES = [
+      { type: 'coins', label: 'Colete {target} Bits', base: 60, step: 30 },
+      { type: 'jumps', label: 'Execute {target} Pulos', base: 15, step: 8 },
+      { type: 'rolls', label: 'Deslize {target} vezes', base: 10, step: 5 },
+      { type: 'boards', label: 'Ative {target} Pranchas Cyber', base: 2, step: 1 },
+      { type: 'powerups', label: 'Pegue {target} Módulos Power-up', base: 3, step: 2 },
+      { type: 'distance', label: 'Percorra {target}m no Datacenter', base: 600, step: 350 }
+    ];
+
+    const WORDS_POOL = ['CODE', 'HTML', 'BYTE', 'DATA', 'LINUX'];
+
+    // Long-term Career Achievements / Trophies with badges and extra Bit rewards
+    const TROPHIES_DATA = [
+      {
+        id: 'bits_2500',
+        badge: '🪙',
+        tier: 'Ouro',
+        title: 'Minerador de 2.500 Bits',
+        desc: 'Acumule 2.500 Bits minerados no total da carreira.',
+        target: 2500,
+        reward: 400
+      },
+      {
+        id: 'unlock_all_gear',
+        badge: '👑',
+        tier: 'Lendário',
+        title: 'Colecionador Full-Stack',
+        desc: 'Desbloqueie todos os avatares e pranchas cyber.',
+        target: CHARACTERS_DATA.length + BOARDS_DATA.length,
+        reward: 650
+      },
+      {
+        id: 'distance_5000m',
+        badge: '🌐',
+        tier: 'Platina',
+        title: 'Viajante de 5.000m',
+        desc: 'Alcance 5.000m percorridos em uma única corrida.',
+        target: 5000,
+        reward: 500
+      },
+      {
+        id: 'words_10',
+        badge: '🔤',
+        tier: 'Prata',
+        title: 'Decodificador Mestre',
+        desc: 'Complete 10 palavras no desafio da pista.',
+        target: 10,
+        reward: 300
+      },
+      {
+        id: 'max_upgrade',
+        badge: '⚡',
+        tier: 'Diamante',
+        title: 'Overclock Máximo',
+        desc: 'Leve qualquer módulo de hardware ao nível máximo (Nv. 5).',
+        target: 5,
+        reward: 450
+      }
+    ];
+
+    const defaultSave = {
+      highScore: 0,
+      coins: 150,
+      totalBitsMined: 0,
+      bestDistance: 0,
+      wordsCompleted: 0,
+      claimedTrophies: [],
+      unlockedChars: ['dev_jr'],
+      selectedChar: 'dev_jr',
+      unlockedBoards: ['pcb_rgb'],
+      selectedBoard: 'pcb_rgb',
+      upgrades: {
+        jetpack: 0,
+        sneakers: 0,
+        magnet: 0,
+        multiplier: 0
+      },
+      permMultiplier: 1,
+      missionSet: 1,
+      missions: null,
+      muted: false
+    };
+
+    let saveData = loadSaveData();
+    if (!saveData.missions || saveData.missions.length !== 3) {
+      saveData.missions = generateMissionSet(saveData.missionSet || 1);
+      persistSaveData();
+    }
+
+    function getTrophyProgress(trophy) {
+      if (trophy.id === 'bits_2500') {
+        return Math.min(trophy.target, saveData.totalBitsMined || 0);
+      }
+      if (trophy.id === 'unlock_all_gear') {
+        const charsCount = (saveData.unlockedChars || []).length;
+        const boardsCount = (saveData.unlockedBoards || []).length;
+        return Math.min(trophy.target, charsCount + boardsCount);
+      }
+      if (trophy.id === 'distance_5000m') {
+        const liveDist = gameState === 'PLAYING' ? Math.floor(distanceRun) : 0;
+        return Math.min(trophy.target, Math.max(saveData.bestDistance || 0, liveDist));
+      }
+      if (trophy.id === 'words_10') {
+        return Math.min(trophy.target, saveData.wordsCompleted || 0);
+      }
+      if (trophy.id === 'max_upgrade') {
+        const levels = Object.values(saveData.upgrades || {});
+        return Math.min(trophy.target, Math.max(0, ...levels));
+      }
+      return 0;
+    }
+
+    function hasClaimableTrophies() {
+      return TROPHIES_DATA.some(t => {
+        const claimed = (saveData.claimedTrophies || []).includes(t.id);
+        return !claimed && getTrophyProgress(t) >= t.target;
+      });
+    }
+
+    function generateMissionSet(setIndex) {
+      const pool = [...MISSION_TEMPLATES].sort(() => Math.random() - 0.5).slice(0, 3);
+      return pool.map((tpl, idx) => {
+        const target = tpl.base + (setIndex - 1) * tpl.step;
+        return {
+          id: `m_${setIndex}_${idx}`,
+          type: tpl.type,
+          text: tpl.label.replace('{target}', target),
+          target,
+          progress: 0,
+          done: false
+        };
+      });
+    }
+
+    function loadSaveData() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return JSON.parse(JSON.stringify(defaultSave));
+        const parsed = JSON.parse(raw);
+        return {
+          ...defaultSave,
+          ...parsed,
+          claimedTrophies: Array.isArray(parsed.claimedTrophies) ? parsed.claimedTrophies : [],
+          upgrades: { ...defaultSave.upgrades, ...(parsed.upgrades || {}) }
+        };
+      } catch (e) {
+        return JSON.parse(JSON.stringify(defaultSave));
+      }
+    }
+
+    function persistSaveData() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(saveData));
+      } catch (e) {
+        // Ignore storage quota errors
+      }
+    }
+
+    // ----------------------------------------------------------------------------
+    // 2. PROCEDURAL WEB AUDIO SYNTHESIZER (SFX + DYNAMIC SYNTHWAVE BEAT)
+    // ----------------------------------------------------------------------------
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+        this.muted = saveData.muted;
+        this.musicTimer = null;
+        this.step = 0;
+        this.isPlayingMusic = false;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) {
+            this.ctx = new AudioCtx();
+          }
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      setMuted(mute) {
+        this.muted = mute;
+        saveData.muted = mute;
+        persistSaveData();
+        if (this.muted) {
+          this.stopMusic();
+        } else if (gameState === 'PLAYING') {
+          this.startMusic();
+        }
+      }
+
+      playTone(freq, type, duration, vol = 0.15, slideFreq = null, delay = 0) {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const now = this.ctx.currentTime + delay;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, now);
+        if (slideFreq) {
+          osc.frequency.exponentialRampToValueAtTime(slideFreq, now + duration);
+        }
+
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.linearRampToValueAtTime(vol, now + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + duration + 0.02);
+      }
+
+      playCoin(combo = 0) {
+        const pitchBoost = Math.min(combo * 24, 340);
+        this.playTone(987 + pitchBoost, 'sine', 0.11, 0.13);
+        this.playTone(1318 + pitchBoost, 'triangle', 0.16, 0.11, null, 0.045);
+      }
+
+      playLetter() {
+        [659.25, 880, 1174.66].forEach((f, i) => {
+          this.playTone(f, 'sine', 0.16, 0.14, null, i * 0.05);
+        });
+      }
+
+      playLootPickup() {
+        [523.25, 783.99, 1046.5, 1567.98].forEach((f, i) => {
+          this.playTone(f, 'triangle', 0.18, 0.15, null, i * 0.06);
+        });
+      }
+
+      playTrainWarning() {
+        this.playTone(880, 'square', 0.08, 0.08);
+        this.playTone(660, 'square', 0.1, 0.08, null, 0.1);
+      }
+
+      playSwipe() {
+        this.playTone(260, 'sine', 0.11, 0.14, 520);
+      }
+
+      playJump(superJump = false) {
+        if (superJump) {
+          this.playTone(240, 'sawtooth', 0.28, 0.14, 880);
+          this.playTone(440, 'sine', 0.3, 0.12, 1100, 0.04);
+        } else {
+          this.playTone(210, 'triangle', 0.19, 0.16, 560);
+        }
+      }
+
+      playRoll() {
+        this.playTone(340, 'triangle', 0.18, 0.14, 110);
+      }
+
+      playPowerup() {
+        const notes = [523.25, 659.25, 783.99, 1046.5];
+        notes.forEach((n, i) => {
+          this.playTone(n, 'triangle', 0.16, 0.15, null, i * 0.055);
+        });
+      }
+
+      playHoverboard() {
+        this.playTone(320, 'sawtooth', 0.24, 0.14, 760);
+        this.playTone(640, 'sine', 0.25, 0.12, 980, 0.06);
+      }
+
+      playStumble() {
+        this.playTone(140, 'sawtooth', 0.24, 0.2, 52);
+        this.playTone(98, 'square', 0.2, 0.16, 42, 0.05);
+      }
+
+      playCrash() {
+        this.playTone(120, 'sawtooth', 0.44, 0.25, 28);
+        this.playTone(85, 'square', 0.36, 0.2, 24, 0.04);
+      }
+
+      playButton() {
+        this.playTone(720, 'sine', 0.07, 0.12, 960);
+      }
+
+      startMusic() {
+        if (this.muted || this.isPlayingMusic) return;
+        this.init();
+        this.isPlayingMusic = true;
+        this.step = 0;
+
+        const bassNotes = [82.41, 82.41, 98.00, 110.00, 82.41, 82.41, 123.47, 110.00];
+        const leadNotes = [329.63, 493.88, 659.25, 587.33, 493.88, 392.00, 440.00, 493.88];
+
+        const tick = () => {
+          if (!this.isPlayingMusic || this.muted || gameState !== 'PLAYING') {
+            this.isPlayingMusic = false;
+            return;
+          }
+          const idx = this.step % bassNotes.length;
+          this.playTone(bassNotes[idx], 'sawtooth', 0.15, 0.06);
+          if (this.step % 2 === 1) {
+            this.playTone(2200, 'sine', 0.025, 0.022);
+          }
+          if (leadNotes[idx] > 0) {
+            this.playTone(leadNotes[idx], 'triangle', 0.11, 0.042);
+          }
+          this.step++;
+          const overclockBoost = activePowers.jetpack.active ? 28 : 0;
+          const tempoMs = Math.max(105, 185 - (gameSpeed - BASE_SPEED) * 1.5 - overclockBoost);
+          this.musicTimer = setTimeout(tick, tempoMs);
+        };
+        tick();
+      }
+
+      stopMusic() {
+        this.isPlayingMusic = false;
+        if (this.musicTimer) {
+          clearTimeout(this.musicTimer);
+          this.musicTimer = null;
+        }
+      }
+    }
+
+    const sound = new SoundEngine();
+
+    // ----------------------------------------------------------------------------
+    // 3. PROCEDURAL CANVAS TEXTURES (PCB TRACKS, RACK SERVERS, RAM, BSOD, LETTERS)
+    // ----------------------------------------------------------------------------
+    function createProceduralTextures() {
+      const textures = {};
+
+      // A. Motherboard PCB Copper & Neon Data Bus Track Texture
+      const trackCanvas = document.createElement('canvas');
+      trackCanvas.width = 512;
+      trackCanvas.height = 512;
+      const tCtx = trackCanvas.getContext('2d');
+      tCtx.fillStyle = '#031c18';
+      tCtx.fillRect(0, 0, 512, 512);
+
+      tCtx.strokeStyle = 'rgba(16, 185, 129, 0.16)';
+      tCtx.lineWidth = 2;
+      for (let g = 0; g < 512; g += 32) {
+        tCtx.beginPath();
+        tCtx.moveTo(g, 0);
+        tCtx.lineTo(g, 512);
+        tCtx.stroke();
+        tCtx.beginPath();
+        tCtx.moveTo(0, g);
+        tCtx.lineTo(512, g);
+        tCtx.stroke();
+      }
+
+      for (let i = 0; i < 28; i++) {
+        const x = 40 + (i * 47) % 432;
+        const y = (i * 73) % 460;
+        tCtx.strokeStyle = i % 2 === 0 ? '#059669' : '#0284c7';
+        tCtx.lineWidth = 4;
+        tCtx.beginPath();
+        tCtx.moveTo(x, y);
+        tCtx.lineTo(x + 24, y + 24);
+        tCtx.lineTo(x + 24, y + 64);
+        tCtx.stroke();
+
+        tCtx.fillStyle = '#fbbf24';
+        tCtx.beginPath();
+        tCtx.arc(x, y, 5, 0, Math.PI * 2);
+        tCtx.fill();
+      }
+
+      for (let y = 20; y < 512; y += 64) {
+        tCtx.fillStyle = 'rgba(6, 182, 212, 0.24)';
+        tCtx.fillRect(36, y, 440, 10);
+      }
+
+      [110, 402].forEach(rx => {
+        tCtx.fillStyle = '#0284c7';
+        tCtx.fillRect(rx - 12, 0, 24, 512);
+        tCtx.fillStyle = '#38bdf8';
+        tCtx.fillRect(rx - 6, 0, 12, 512);
+        tCtx.fillStyle = '#e0f2fe';
+        tCtx.fillRect(rx - 2, 0, 4, 512);
+      });
+
+      textures.track = new THREE.CanvasTexture(trackCanvas);
+      textures.track.wrapS = THREE.RepeatWrapping;
+      textures.track.wrapT = THREE.RepeatWrapping;
+      textures.track.repeat.set(1, 4);
+
+      // B. Hardware Server Rack / Gamer CPU / RAM Module Textures (3 Variants)
+      const hardwareThemes = [
+        { type: 'SERVER', chassis: '#0f172a', border: '#38bdf8', led1: '#22c55e', led2: '#38bdf8', tag: 'SERVER_01' },
+        { type: 'GAMER_CPU', chassis: '#111827', border: '#a855f7', led1: '#ec4899', led2: '#06b6d4', tag: 'RGB_CORE' },
+        { type: 'RAM_BINARY', chassis: '#064e3b', border: '#facc15', led1: '#4ade80', led2: '#facc15', tag: 'DDR5_RAM' }
+      ];
+
+      textures.trainSides = hardwareThemes.map(theme => {
+        const c = document.createElement('canvas');
+        c.width = 512;
+        c.height = 256;
+        const ctx = c.getContext('2d');
+
+        ctx.fillStyle = theme.chassis;
+        ctx.fillRect(0, 0, 512, 256);
+
+        ctx.strokeStyle = theme.border;
+        ctx.lineWidth = 8;
+        ctx.strokeRect(6, 6, 500, 244);
+
+        if (theme.type === 'RAM_BINARY') {
+          ctx.fillStyle = '#facc15';
+          for (let px = 16; px < 496; px += 18) {
+            ctx.fillRect(px, 224, 11, 28);
+          }
+          for (let i = 0; i < 4; i++) {
+            const cx = 36 + i * 116;
+            ctx.fillStyle = '#020617';
+            ctx.fillRect(cx, 54, 88, 125);
+            ctx.strokeStyle = '#10b981';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(cx, 54, 88, 125);
+
+            ctx.fillStyle = '#4ade80';
+            ctx.font = 'bold 16px monospace';
+            for (let by = 78; by < 170; by += 22) {
+              ctx.fillText(Math.random() < 0.5 ? '10110' : '01001', cx + 14, by);
+            }
+          }
+        } else {
+          // Server rack slots & status LEDs
+          for (let row = 0; row < 4; row++) {
+            const ry = 28 + row * 48;
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(26, ry, 460, 36);
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.35)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(26, ry, 460, 36);
+
+            ctx.fillStyle = row % 2 === 0 ? theme.led1 : theme.led2;
+            for (let led = 0; led < 6; led++) {
+              ctx.beginPath();
+              ctx.arc(54 + led * 24, ry + 18, 5, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        }
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = '900 22px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(theme.tag, 474, 214);
+
+        const tex = new THREE.CanvasTexture(c);
+        return tex;
+      });
+
+      // C. Datacenter Wall / Circuit Panel Texture
+      const wallCanvas = document.createElement('canvas');
+      wallCanvas.width = 256;
+      wallCanvas.height = 256;
+      const wCtx = wallCanvas.getContext('2d');
+      wCtx.fillStyle = '#071324';
+      wCtx.fillRect(0, 0, 256, 256);
+      wCtx.strokeStyle = 'rgba(56, 189, 248, 0.25)';
+      wCtx.lineWidth = 3;
+      wCtx.strokeRect(8, 8, 240, 240);
+      wCtx.fillStyle = 'rgba(16, 185, 129, 0.16)';
+      wCtx.fillRect(24, 24, 208, 96);
+      wCtx.fillRect(24, 136, 208, 96);
+      textures.wall = new THREE.CanvasTexture(wallCanvas);
+      textures.wall.wrapS = THREE.RepeatWrapping;
+      textures.wall.wrapT = THREE.RepeatWrapping;
+      textures.wall.repeat.set(4, 1);
+
+      // D. Fatal Error OS Dialog Barrier Texture (matching attached reference)
+      const barCanvas = document.createElement('canvas');
+      barCanvas.width = 512;
+      barCanvas.height = 384;
+      const bCtx = barCanvas.getContext('2d');
+
+      // Outer gray OS window body with bevel border
+      bCtx.fillStyle = '#b4b4b4';
+      bCtx.fillRect(0, 0, 512, 384);
+      bCtx.strokeStyle = '#475569';
+      bCtx.lineWidth = 8;
+      bCtx.strokeRect(4, 4, 504, 376);
+
+      // Top title bar gradient ("Fatal Error" + close "[X]")
+      const titleGrad = bCtx.createLinearGradient(14, 14, 498, 14);
+      titleGrad.addColorStop(0, '#1e3a8a');
+      titleGrad.addColorStop(1, '#4f46e5');
+      bCtx.fillStyle = titleGrad;
+      bCtx.fillRect(14, 14, 484, 56);
+
+      bCtx.fillStyle = '#ffffff';
+      bCtx.font = 'bold 34px sans-serif';
+      bCtx.textAlign = 'left';
+      bCtx.textBaseline = 'middle';
+      bCtx.fillText('Fatal Error', 26, 43);
+
+      // Close square button on title bar
+      bCtx.fillStyle = '#cbd5e1';
+      bCtx.fillRect(450, 21, 40, 40);
+      bCtx.strokeStyle = '#334155';
+      bCtx.lineWidth = 3;
+      bCtx.strokeRect(450, 21, 40, 40);
+      bCtx.strokeStyle = '#0f172a';
+      bCtx.lineWidth = 5;
+      bCtx.beginPath();
+      bCtx.moveTo(460, 31);
+      bCtx.lineTo(480, 51);
+      bCtx.moveTo(480, 31);
+      bCtx.lineTo(460, 51);
+      bCtx.stroke();
+
+      // Red circle with white X icon on the left
+      bCtx.fillStyle = '#dc2626';
+      bCtx.beginPath();
+      bCtx.arc(104, 178, 56, 0, Math.PI * 2);
+      bCtx.fill();
+      bCtx.strokeStyle = '#991b1b';
+      bCtx.lineWidth = 4;
+      bCtx.stroke();
+
+      bCtx.strokeStyle = '#ffffff';
+      bCtx.lineWidth = 12;
+      bCtx.lineCap = 'round';
+      bCtx.beginPath();
+      bCtx.moveTo(82, 156);
+      bCtx.lineTo(126, 200);
+      bCtx.moveTo(126, 156);
+      bCtx.lineTo(82, 200);
+      bCtx.stroke();
+
+      // Centered "ERROR" label
+      bCtx.fillStyle = '#0f172a';
+      bCtx.font = 'bold 54px sans-serif';
+      bCtx.textAlign = 'center';
+      bCtx.textBaseline = 'middle';
+      bCtx.fillText('ERROR', 316, 178);
+
+      // "OK" button at bottom center
+      bCtx.fillStyle = '#a8a8a8';
+      bCtx.fillRect(184, 272, 144, 56);
+      bCtx.strokeStyle = '#1e293b';
+      bCtx.lineWidth = 4;
+      bCtx.strokeRect(184, 272, 144, 56);
+
+      bCtx.fillStyle = '#0f172a';
+      bCtx.font = 'bold 30px sans-serif';
+      bCtx.textAlign = 'center';
+      bCtx.textBaseline = 'middle';
+      bCtx.fillText('OK', 256, 301);
+
+      textures.barrier = new THREE.CanvasTexture(barCanvas);
+
+      // E. Binary Bit Coin Face Texture ('01')
+      const bitCanvas = document.createElement('canvas');
+      bitCanvas.width = 128;
+      bitCanvas.height = 128;
+      const bitCtx = bitCanvas.getContext('2d');
+      bitCtx.fillStyle = '#facc15';
+      bitCtx.fillRect(0, 0, 128, 128);
+      bitCtx.strokeStyle = '#b45309';
+      bitCtx.lineWidth = 10;
+      bitCtx.beginPath();
+      bitCtx.arc(64, 64, 54, 0, Math.PI * 2);
+      bitCtx.stroke();
+      bitCtx.fillStyle = '#78350f';
+      bitCtx.font = '900 50px monospace';
+      bitCtx.textAlign = 'center';
+      bitCtx.textBaseline = 'middle';
+      bitCtx.fillText('01', 64, 66);
+      textures.bitFace = new THREE.CanvasTexture(bitCanvas);
+
+      // F. Mystery .ZIP Crate Texture
+      const zipCanvas = document.createElement('canvas');
+      zipCanvas.width = 128;
+      zipCanvas.height = 128;
+      const zCtx = zipCanvas.getContext('2d');
+      zCtx.fillStyle = '#7e22ce';
+      zCtx.fillRect(0, 0, 128, 128);
+      zCtx.strokeStyle = '#facc15';
+      zCtx.lineWidth = 10;
+      zCtx.strokeRect(6, 6, 116, 116);
+      zCtx.fillStyle = '#facc15';
+      zCtx.font = '900 34px monospace';
+      zCtx.textAlign = 'center';
+      zCtx.textBaseline = 'middle';
+      zCtx.fillText('.ZIP', 64, 66);
+      textures.zipBox = new THREE.CanvasTexture(zipCanvas);
+
+      // G. Letter Badge Texture Cache
+      textures.letters = {};
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(ch => {
+        const lc = document.createElement('canvas');
+        lc.width = 128;
+        lc.height = 128;
+        const lctx = lc.getContext('2d');
+        lctx.fillStyle = '#0284c7';
+        lctx.fillRect(0, 0, 128, 128);
+        lctx.strokeStyle = '#38bdf8';
+        lctx.lineWidth = 10;
+        lctx.strokeRect(6, 6, 116, 116);
+        lctx.fillStyle = '#ffffff';
+        lctx.font = '900 72px monospace';
+        lctx.textAlign = 'center';
+        lctx.textBaseline = 'middle';
+        lctx.fillText(ch, 64, 68);
+        textures.letters[ch] = new THREE.CanvasTexture(lc);
+      });
+
+      return textures;
+    }
+
+    // ----------------------------------------------------------------------------
+    // 4. THREE.JS SCENE SETUP, DYNAMIC BIOME LIGHTING & MATRIX SKY
+    // ----------------------------------------------------------------------------
+    const container = document.getElementById('game-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(ZONES_DATA[0].bg);
+    scene.fog = new THREE.FogExp2(ZONES_DATA[0].fog, 0.0085);
+
+    const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 220);
+    camera.position.set(0, 6.2, 11.5);
+    camera.lookAt(0, 2.2, -10);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.insertBefore(renderer.domElement, container.firstChild);
+
+    const hemiLight = new THREE.HemisphereLight(ZONES_DATA[0].hemiSky, ZONES_DATA[0].hemiGround, 0.95);
+    hemiLight.position.set(0, 40, 0);
+    scene.add(hemiLight);
+
+    const dirLight = new THREE.DirectionalLight(0xe0f2fe, 1.15);
+    dirLight.position.set(18, 36, 22);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 1024;
+    dirLight.shadow.mapSize.height = 1024;
+    dirLight.shadow.camera.near = 5;
+    dirLight.shadow.camera.far = 110;
+    const d = 28;
+    dirLight.shadow.camera.left = -d;
+    dirLight.shadow.camera.right = d;
+    dirLight.shadow.camera.top = d;
+    dirLight.shadow.camera.bottom = -d;
+    scene.add(dirLight);
+
+    const textures = createProceduralTextures();
+
+    // Floating Matrix Code Particles in the Sky
+    const matrixRainCount = 160;
+    const matrixGeo = new THREE.BoxGeometry(0.14, 0.85, 0.14);
+    const matrixMat = new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.55 });
+    const matrixDrops = [];
+    for (let i = 0; i < matrixRainCount; i++) {
+      const drop = new THREE.Mesh(matrixGeo, matrixMat);
+      drop.position.set(
+        (Math.random() - 0.5) * 65,
+        8 + Math.random() * 28,
+        15 - Math.random() * 170
+      );
+      scene.add(drop);
+      matrixDrops.push({ mesh: drop, speed: 6 + Math.random() * 10 });
+    }
+
+    // ----------------------------------------------------------------------------
+    // 5. WORLD MOTHERBOARD BUSES, DATACENTER TOWERS & RECORD LINE MARKER
+    // ----------------------------------------------------------------------------
+    const LANE_WIDTH = 3.2;
+    const LANES = [-LANE_WIDTH, 0, LANE_WIDTH];
+    const BASE_SPEED = 27;
+    const MAX_SPEED = 58;
+
+    const trackGroup = new THREE.Group();
+    scene.add(trackGroup);
+
+    const baseGround = new THREE.Mesh(
+      new THREE.PlaneGeometry(54, 280),
+      new THREE.MeshStandardMaterial({ color: 0x020617, roughness: 0.85 })
+    );
+    baseGround.rotation.x = -Math.PI / 2;
+    baseGround.position.set(0, -0.02, -95);
+    baseGround.receiveShadow = true;
+    trackGroup.add(baseGround);
+
+    const trackStrips = [];
+    const trackMaterials = [];
+    LANES.forEach(xPos => {
+      const mat = new THREE.MeshStandardMaterial({ map: textures.track, roughness: 0.55, metalness: 0.25 });
+      const strip = new THREE.Mesh(new THREE.PlaneGeometry(2.75, 280), mat);
+      strip.rotation.x = -Math.PI / 2;
+      strip.position.set(xPos, 0.01, -95);
+      strip.receiveShadow = true;
+      trackGroup.add(strip);
+      trackStrips.push(strip);
+      trackMaterials.push(mat);
+    });
+
+    // Viaduct deck & maglev guide rails along the 3 lanes
+    const viaductDeck = new THREE.Mesh(
+      new THREE.BoxGeometry(11.6, 0.45, 280),
+      new THREE.MeshStandardMaterial({ color: 0x0b1324, metalness: 0.45, roughness: 0.55 })
+    );
+    viaductDeck.position.set(0, -0.24, -95);
+    viaductDeck.receiveShadow = true;
+    trackGroup.add(viaductDeck);
+
+    // Physical High-Score Line on the Track Floor!
+    const recordLineGroup = new THREE.Group();
+    const recordStrip = new THREE.Mesh(
+      new THREE.PlaneGeometry(10.6, 0.55),
+      new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+    );
+    recordStrip.rotation.x = -Math.PI / 2;
+    recordStrip.position.y = 0.04;
+    const recordPillarL = new THREE.Mesh(
+      new THREE.BoxGeometry(0.25, 3.8, 0.25),
+      new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+    );
+    recordPillarL.position.set(-5.2, 1.9, 0);
+    const recordPillarR = recordPillarL.clone();
+    recordPillarR.position.x = 5.2;
+    recordLineGroup.add(recordStrip, recordPillarL, recordPillarR);
+    recordLineGroup.visible = false;
+    scene.add(recordLineGroup);
+
+    // Side Datacenter Viaducts, Catenary Fiber Cables, Mainframe Towers & Gantries
+    const sceneryChunks = [];
+    const neonStripMaterials = [];
+    const cableMaterials = [];
+    const mainframeColors = [0x0f172a, 0x1e1b4b, 0x064e3b, 0x172554];
+
+    function createCatenaryCable(x1, y1, z1, x2, y2, z2, sag, mat) {
+      const midX = (x1 + x2) * 0.5;
+      const midZ = (z1 + z2) * 0.5;
+      const midY = Math.min(y1, y2) - sag;
+      const curve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(x1, y1, z1),
+        new THREE.Vector3(midX, midY, midZ),
+        new THREE.Vector3(x2, y2, z2)
+      ]);
+      const geo = new THREE.TubeGeometry(curve, 18, 0.065, 8, false);
+      return new THREE.Mesh(geo, mat);
+    }
+
+    function buildSceneryChunk(zPos) {
+      const chunk = new THREE.Group();
+      chunk.position.z = zPos;
+
+      const poleMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.72, roughness: 0.28 });
+      const neonMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+      const cableMat = new THREE.MeshStandardMaterial({
+        color: 0x22d3ee,
+        emissive: 0x0284c7,
+        emissiveIntensity: 0.45,
+        roughness: 0.35,
+        metalness: 0.4
+      });
+      neonStripMaterials.push(neonMat);
+      cableMaterials.push(cableMat);
+
+      [-7.2, 7.2].forEach(sideX => {
+        // Viaduct parapet wall with bevel cap
+        const wall = new THREE.Mesh(
+          new THREE.BoxGeometry(1.15, 2.2, 24),
+          new THREE.MeshStandardMaterial({ map: textures.wall, roughness: 0.65, metalness: 0.2 })
+        );
+        wall.position.set(sideX, 1.1, 0);
+        wall.receiveShadow = true;
+        wall.castShadow = true;
+        chunk.add(wall);
+
+        const cap = new THREE.Mesh(
+          new THREE.BoxGeometry(1.32, 0.22, 24.1),
+          poleMat
+        );
+        cap.position.set(sideX, 2.28, 0);
+        chunk.add(cap);
+
+        // Support pylon column for catenary fiber cables
+        const pylon = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.24, 0.34, 8.8, 12),
+          poleMat
+        );
+        pylon.position.set(sideX * 0.94, 4.4, -12);
+        chunk.add(pylon);
+
+        const arm = new THREE.Mesh(
+          new THREE.BoxGeometry(1.3, 0.16, 0.16),
+          poleMat
+        );
+        arm.position.set(sideX * 0.94 + (sideX < 0 ? 0.45 : -0.45), 8.5, -12);
+        chunk.add(arm);
+
+        // Natural drooping catenary fiber-optic cables spanning chunk-to-chunk
+        const tipX = sideX * 0.94 + (sideX < 0 ? 1.05 : -1.05);
+        const cable1 = createCatenaryCable(tipX, 8.45, -24, tipX, 8.45, 0, 1.45, cableMat);
+        const cable2 = createCatenaryCable(sideX * 0.94, 7.2, -24, sideX * 0.94, 7.2, 0, 1.1, cableMat);
+        chunk.add(cable1, cable2);
+
+        // Background Datacenter Towers set back for depth & parallax
+        const bHeight = 18 + Math.random() * 18;
+        const bColor = mainframeColors[Math.floor(Math.random() * mainframeColors.length)];
+        const tower = new THREE.Mesh(
+          new THREE.BoxGeometry(9.5, bHeight, 20),
+          new THREE.MeshStandardMaterial({ color: bColor, roughness: 0.58, metalness: 0.25 })
+        );
+        tower.position.set(sideX + (sideX < 0 ? -7.2 : 7.2), bHeight / 2 - 2, 0);
+        chunk.add(tower);
+
+        const ledColor = Math.random() < 0.5 ? 0x22d3ee : 0x4ade80;
+        const winMat = new THREE.MeshBasicMaterial({ color: ledColor });
+        for (let wy = 4; wy < bHeight - 4; wy += 3.4) {
+          const stripLed = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 0.42), winMat);
+          stripLed.position.set(sideX + (sideX < 0 ? -2.4 : 2.4), wy, 0);
+          stripLed.rotation.y = sideX < 0 ? Math.PI / 2 : -Math.PI / 2;
+          chunk.add(stripLed);
+        }
+      });
+
+      // Overhead Data Viaduct Arch / Gantry
+      const leftPole = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.3, 9.6, 12), poleMat);
+      leftPole.position.set(-6.3, 4.8, 0);
+      const rightPole = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.3, 9.6, 12), poleMat);
+      rightPole.position.set(6.3, 4.8, 0);
+      const crossBeam = new THREE.Mesh(new THREE.BoxGeometry(13.2, 0.34, 0.42), poleMat);
+      crossBeam.position.set(0, 9.5, 0);
+      const neonStrip = new THREE.Mesh(new THREE.BoxGeometry(12.6, 0.12, 0.46), neonMat);
+      neonStrip.position.set(0, 9.32, 0);
+      chunk.add(leftPole, rightPole, crossBeam, neonStrip);
+
+      scene.add(chunk);
+      return chunk;
+    }
+
+    for (let i = 0; i < 10; i++) {
+      sceneryChunks.push(buildSceneryChunk(24 - i * 24));
+    }
+
+    // ----------------------------------------------------------------------------
+    // 6. NATURAL ARTICULATED 3D HUMAN RUNNER, ANTIVIRUS AGENT, WATCHDOG & BOARD
+    // ----------------------------------------------------------------------------
+    function createCapsuleFallbackGeometry(radius, length, capSegments = 12, radialSegments = 16) {
+      const group = new THREE.Group();
+      const cyl = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius, radius, Math.max(0.01, length), radialSegments, 1, false),
+        new THREE.MeshBasicMaterial()
+      );
+      // Build a merged-style single BufferGeometry using cylinder + top/bottom hemisphere spheres
+      const cylGeo = new THREE.CylinderGeometry(radius, radius, Math.max(0.01, length), radialSegments, 1);
+      const topSphere = new THREE.Mesh(new THREE.SphereGeometry(radius, radialSegments, capSegments));
+      topSphere.position.y = length * 0.5;
+      topSphere.updateMatrix();
+
+      const botSphere = new THREE.Mesh(new THREE.SphereGeometry(radius, radialSegments, capSegments));
+      botSphere.position.y = -length * 0.5;
+      botSphere.updateMatrix();
+
+      // Return cylinder geometry with spherical end-caps placed via helper
+      return { cylGeo, topSphere, botSphere, group };
+    }
+
+    function createCapsuleMesh(radius, length, material, radialSegments = 14, capSegments = 10) {
+      const capsule = new THREE.Group();
+      const body = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius, radius, Math.max(0.01, length), radialSegments, 1),
+        material
+      );
+      body.castShadow = true;
+      body.receiveShadow = true;
+
+      const topCap = new THREE.Mesh(new THREE.SphereGeometry(radius, radialSegments, capSegments), material);
+      topCap.position.y = length * 0.5;
+      topCap.castShadow = true;
+
+      const botCap = new THREE.Mesh(new THREE.SphereGeometry(radius, radialSegments, capSegments), material);
+      botCap.position.y = -length * 0.5;
+      botCap.castShadow = true;
+
+      capsule.add(body, topCap, botCap);
+      return capsule;
+    }
+
+    function createCharacterMesh(charId) {
+      const cfg = CHARACTERS_DATA.find(c => c.id === charId) || CHARACTERS_DATA[0];
+      const boardCfg = BOARDS_DATA.find(b => b.id === saveData.selectedBoard) || BOARDS_DATA[0];
+      const c = cfg.colors;
+      const root = new THREE.Group();
+
+      // Soft ground shadow oval
+      const shadowGeo = new THREE.CircleGeometry(0.76, 24);
+      const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.46 });
+      const shadowBlob = new THREE.Mesh(shadowGeo, shadowMat);
+      shadowBlob.rotation.x = -Math.PI / 2;
+      shadowBlob.position.y = 0.03;
+      root.add(shadowBlob);
+
+      // Hip / Pelvis root pivot for natural athletic stride bobbing & twist
+      const rig = new THREE.Group();
+      root.add(rig);
+
+      const matSkin = new THREE.MeshStandardMaterial({ color: c.skin, roughness: 0.52, metalness: 0.05 });
+      const matShirt = new THREE.MeshStandardMaterial({ color: c.shirt, roughness: 0.48, metalness: 0.12 });
+      const matHoodie = new THREE.MeshStandardMaterial({ color: c.hoodie, roughness: 0.45, metalness: 0.18 });
+      const matPants = new THREE.MeshStandardMaterial({ color: c.pants, roughness: 0.65, metalness: 0.1 });
+      const matShoes = new THREE.MeshStandardMaterial({ color: c.shoes, roughness: 0.36, metalness: 0.25 });
+      const matSole = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.55 });
+      const matHat = new THREE.MeshStandardMaterial({ color: c.hat, roughness: 0.42, metalness: 0.2 });
+      const matAccent = new THREE.MeshStandardMaterial({
+        color: c.accent,
+        emissive: c.accent,
+        emissiveIntensity: 0.45,
+        roughness: 0.25,
+        metalness: 0.3
+      });
+
+      // Pelvis & Tapered Athletic Torso (chest wider than waist)
+      const pelvis = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.3, 0.24, 16), matPants);
+      pelvis.position.y = 0.96;
+      pelvis.castShadow = true;
+      rig.add(pelvis);
+
+      const torsoGroup = new THREE.Group();
+      torsoGroup.position.y = 1.06;
+      rig.add(torsoGroup);
+
+      // Lower waist/abdomen & broader sculpted chest
+      const waist = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.31, 0.42, 18), matShirt);
+      waist.position.y = 0.21;
+      waist.castShadow = true;
+      torsoGroup.add(waist);
+
+      const chest = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.35, 0.54, 18), matShirt);
+      chest.scale.set(1.08, 1, 0.78);
+      chest.position.y = 0.62;
+      chest.castShadow = true;
+      torsoGroup.add(chest);
+
+      // Rounded jacket/hoodie collar & front zipper line
+      const collar = new THREE.Mesh(new THREE.TorusGeometry(0.21, 0.065, 12, 20), matHoodie);
+      collar.rotation.x = Math.PI / 2;
+      collar.position.set(0, 0.89, 0.02);
+      torsoGroup.add(collar);
+
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.76, 0.37), matAccent);
+      stripe.position.set(0, 0.46, 0.03);
+      torsoGroup.add(stripe);
+
+      // Rounded Tech Backpack with straps
+      const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.62, 0.24), matHoodie);
+      backpack.position.set(0, 0.56, 0.31);
+      backpack.castShadow = true;
+      torsoGroup.add(backpack);
+
+      // Fiber-Optic Overclock Jetpack (Dual angled thrusters + fins)
+      const jetpackGroup = new THREE.Group();
+      jetpackGroup.position.set(0, 0.58, 0.4);
+      jetpackGroup.visible = false;
+      const tankMat = new THREE.MeshStandardMaterial({
+        color: 0x06b6d4,
+        emissive: 0x0284c7,
+        emissiveIntensity: 0.45,
+        metalness: 0.72,
+        roughness: 0.22
+      });
+      const nozzleMat = new THREE.MeshStandardMaterial({ color: 0xf97316, emissive: 0xea580c, emissiveIntensity: 0.55 });
+      [-0.2, 0.2].forEach(tx => {
+        const tank = createCapsuleMesh(0.13, 0.56, tankMat, 12, 8);
+        tank.position.set(tx, 0.04, 0);
+        const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.16, 0.2, 12), nozzleMat);
+        nozzle.position.set(tx, -0.36, 0);
+        jetpackGroup.add(tank, nozzle);
+      });
+      torsoGroup.add(jetpackGroup);
+
+      // Neck & Sculpted Oval Human Head + Styled Hair / Cyber Gear
+      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.15, 0.18, 14), matSkin);
+      neck.position.set(0, 0.92, -0.02);
+      torsoGroup.add(neck);
+
+      const headGroup = new THREE.Group();
+      headGroup.position.set(0, 1.24, -0.03);
+      torsoGroup.add(headGroup);
+
+      // Oval cranium + slightly tapered jaw
+      const cranium = new THREE.Mesh(new THREE.SphereGeometry(0.32, 20, 18), matSkin);
+      cranium.scale.set(0.92, 1.08, 1.0);
+      cranium.position.y = 0.04;
+      cranium.castShadow = true;
+      headGroup.add(cranium);
+
+      const jaw = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.15, 0.24, 16), matSkin);
+      jaw.scale.set(0.95, 1, 0.92);
+      jaw.position.set(0, -0.14, -0.02);
+      headGroup.add(jaw);
+
+      // Subtle human ears + expressive eyes
+      [-0.29, 0.29].forEach(ex => {
+        const ear = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 10), matSkin);
+        ear.scale.set(0.55, 1.1, 0.85);
+        ear.position.set(ex, -0.02, 0);
+        headGroup.add(ear);
+      });
+
+      const eyeWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const pupilMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+      [-0.1, 0.1].forEach(ex => {
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 10), eyeWhiteMat);
+        eye.scale.set(1.15, 0.95, 0.55);
+        eye.position.set(ex, 0.0, -0.28);
+        const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 10), pupilMat);
+        pupil.position.set(ex * 0.95, 0.0, -0.305);
+        headGroup.add(eye, pupil);
+      });
+
+      // Styled 3D Hair Tufts / Fringe (never a flat box!)
+      const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.34, 20, 16, 0, Math.PI * 2, 0, Math.PI * 0.62), matHat);
+      hairCap.scale.set(0.96, 1.06, 1.04);
+      hairCap.position.set(0, 0.07, 0.02);
+      headGroup.add(hairCap);
+
+      for (let t = -2; t <= 2; t++) {
+        const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.085, 0.24, 8), matHat);
+        tuft.position.set(t * 0.1, 0.26, -0.18 + Math.abs(t) * 0.03);
+        tuft.rotation.x = -0.68;
+        tuft.rotation.z = -t * 0.14;
+        headGroup.add(tuft);
+      }
+
+      if (cfg.style === 'headset') {
+        const band = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.035, 10, 24, Math.PI), matAccent);
+        band.rotation.z = Math.PI;
+        band.position.set(0, 0.08, 0.01);
+        const earCupL = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.09, 16), matHat);
+        earCupL.rotation.z = Math.PI / 2;
+        earCupL.position.set(-0.33, 0.01, 0);
+        const earCupR = earCupL.clone();
+        earCupR.position.x = 0.33;
+        const mic = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.26, 8), matAccent);
+        mic.rotation.x = Math.PI / 2.6;
+        mic.position.set(-0.31, -0.12, -0.18);
+        headGroup.add(band, earCupL, earCupR, mic);
+      } else if (cfg.style === 'hood_visor') {
+        const hoodShell = new THREE.Mesh(new THREE.SphereGeometry(0.37, 18, 16, 0, Math.PI * 2, 0, Math.PI * 0.72), matHat);
+        hoodShell.position.set(0, 0.05, 0.04);
+        const visor = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.13, 0.09), matAccent);
+        visor.position.set(0, 0.02, -0.29);
+        headGroup.add(hoodShell, visor);
+      } else if (cfg.style === 'root_helmet') {
+        const dome = new THREE.Mesh(new THREE.SphereGeometry(0.37, 20, 16, 0, Math.PI * 2, 0, Math.PI * 0.65), matHat);
+        dome.position.set(0, 0.08, 0);
+        const crest = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.22, 0.62), matAccent);
+        crest.position.set(0, 0.42, 0.02);
+        const visor = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.12, 0.1), matAccent);
+        visor.position.set(0, 0.02, -0.29);
+        headGroup.add(dome, crest, visor);
+      }
+
+      // Articulated Arms (Shoulder -> Upper Arm -> Elbow Hinge -> Forearm -> Hand)
+      function makeNaturalArm(sideSign) {
+        const shoulderPivot = new THREE.Group();
+        shoulderPivot.position.set(sideSign * 0.52, 0.78, 0);
+
+        const shoulderJoint = new THREE.Mesh(new THREE.SphereGeometry(0.145, 14, 14), matHoodie);
+        shoulderPivot.add(shoulderJoint);
+
+        const upperArm = new THREE.Mesh(new THREE.CylinderGeometry(0.125, 0.105, 0.36, 14), matHoodie);
+        upperArm.position.y = -0.18;
+        upperArm.castShadow = true;
+        shoulderPivot.add(upperArm);
+
+        const elbowPivot = new THREE.Group();
+        elbowPivot.position.y = -0.36;
+        shoulderPivot.add(elbowPivot);
+
+        const elbowJoint = new THREE.Mesh(new THREE.SphereGeometry(0.105, 12, 12), matSkin);
+        elbowPivot.add(elbowJoint);
+
+        const forearm = new THREE.Mesh(new THREE.CylinderGeometry(0.102, 0.082, 0.34, 14), matSkin);
+        forearm.position.y = -0.17;
+        forearm.castShadow = true;
+        elbowPivot.add(forearm);
+
+        const hand = new THREE.Mesh(new THREE.SphereGeometry(0.095, 12, 12), matSkin);
+        hand.scale.set(0.85, 1.15, 1.05);
+        hand.position.y = -0.37;
+        elbowPivot.add(hand);
+
+        return { shoulder: shoulderPivot, elbow: elbowPivot };
+      }
+
+      const armL = makeNaturalArm(-1);
+      const armR = makeNaturalArm(1);
+      torsoGroup.add(armL.shoulder, armR.shoulder);
+
+      // Articulated Legs (Hip -> Thigh -> Knee Hinge -> Shin -> Ankle -> Sneaker with Sole)
+      function makeNaturalLeg(sideSign) {
+        const hipPivot = new THREE.Group();
+        hipPivot.position.set(sideSign * 0.21, 0.92, 0);
+
+        const hipJoint = new THREE.Mesh(new THREE.SphereGeometry(0.15, 14, 14), matPants);
+        hipPivot.add(hipJoint);
+
+        const thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.125, 0.44, 14), matPants);
+        thigh.position.y = -0.22;
+        thigh.castShadow = true;
+        hipPivot.add(thigh);
+
+        const kneePivot = new THREE.Group();
+        kneePivot.position.y = -0.44;
+        hipPivot.add(kneePivot);
+
+        const kneeJoint = new THREE.Mesh(new THREE.SphereGeometry(0.122, 12, 12), matPants);
+        kneePivot.add(kneeJoint);
+
+        const shin = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.092, 0.42, 14), matPants);
+        shin.position.y = -0.21;
+        shin.castShadow = true;
+        kneePivot.add(shin);
+
+        const footPivot = new THREE.Group();
+        footPivot.position.y = -0.44;
+        kneePivot.add(footPivot);
+
+        const sole = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.07, 0.48), matSole);
+        sole.position.set(0, -0.035, -0.07);
+        sole.castShadow = true;
+        footPivot.add(sole);
+
+        const shoeUpper = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.14, 0.44), matShoes);
+        shoeUpper.position.set(0, 0.04, -0.06);
+        shoeUpper.castShadow = true;
+        footPivot.add(shoeUpper);
+
+        const shoeAccent = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.04, 0.24), matAccent);
+        shoeAccent.position.set(0, 0.09, -0.11);
+        footPivot.add(shoeAccent);
+
+        const superSole = new THREE.Mesh(
+          new THREE.BoxGeometry(0.32, 0.12, 0.56),
+          new THREE.MeshStandardMaterial({ color: 0x4ade80, emissive: 0x22c55e, emissiveIntensity: 0.65 })
+        );
+        superSole.position.set(0, -0.09, -0.07);
+        superSole.visible = false;
+        footPivot.add(superSole);
+
+        return { hip: hipPivot, knee: kneePivot, foot: footPivot, superSole };
+      }
+
+      const legL = makeNaturalLeg(-1);
+      const legR = makeNaturalLeg(1);
+      rig.add(legL.hip, legR.hip);
+
+      // Cyber Hoverboard with Thruster Pods
+      const boardGroup = new THREE.Group();
+      boardGroup.position.set(0, 0.12, 0);
+      boardGroup.visible = false;
+      const pcbDeck = new THREE.Mesh(
+        new THREE.BoxGeometry(1.06, 0.12, 2.24),
+        new THREE.MeshStandardMaterial({
+          color: boardCfg.deckColor,
+          emissive: boardCfg.deckColor,
+          emissiveIntensity: 0.35,
+          roughness: 0.25,
+          metalness: 0.5
+        })
+      );
+      const rgbTrim = new THREE.Mesh(
+        new THREE.BoxGeometry(1.14, 0.07, 2.02),
+        new THREE.MeshBasicMaterial({ color: boardCfg.trimColor })
+      );
+      boardGroup.add(pcbDeck, rgbTrim);
+      [-0.78, 0.78].forEach(bz => {
+        [-0.36, 0.36].forEach(bx => {
+          const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.14, 0.14, 12), matAccent);
+          pod.position.set(bx, -0.08, bz);
+          boardGroup.add(pod);
+        });
+      });
+      rig.add(boardGroup);
+
+      // Data Indexer Magnet Halo
+      const magnetHalo = new THREE.Mesh(
+        new THREE.TorusGeometry(0.34, 0.065, 10, 24, Math.PI),
+        new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.55 })
+      );
+      magnetHalo.position.set(0, 2.68, 0);
+      magnetHalo.visible = false;
+      rig.add(magnetHalo);
+
+      root.userData = {
+        rig,
+        torsoGroup,
+        shadowBlob,
+        headGroup,
+        leftArm: armL.shoulder,
+        rightArm: armR.shoulder,
+        leftElbow: armL.elbow,
+        rightElbow: armR.elbow,
+        leftLeg: legL.hip,
+        rightLeg: legR.hip,
+        leftKnee: legL.knee,
+        rightKnee: legR.knee,
+        leftFoot: legL.foot,
+        rightFoot: legR.foot,
+        leftSuperSole: legL.superSole,
+        rightSuperSole: legR.superSole,
+        jetpackGroup,
+        boardGroup,
+        magnetHalo
+      };
+
+      return root;
+    }
+
+    function createChaserGroup() {
+      const chaser = new THREE.Group();
+
+      // 1. Human-Proportioned Articulated Antivirus Agent
+      const agent = new THREE.Group();
+      agent.position.x = -0.52;
+
+      const armorRed = new THREE.MeshStandardMaterial({ color: 0xdc2626, metalness: 0.45, roughness: 0.32 });
+      const darkSuit = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.35, roughness: 0.55 });
+      const goldTrim = new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0xca8a04, emissiveIntensity: 0.35 });
+      const visorGlow = new THREE.MeshBasicMaterial({ color: 0xff3b30 });
+
+      const agentTorso = new THREE.Group();
+      agentTorso.position.y = 1.06;
+      agent.add(agentTorso);
+
+      const chestPlate = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.34, 0.88, 16), armorRed);
+      chestPlate.scale.set(1.06, 1, 0.78);
+      chestPlate.position.y = 0.44;
+      chestPlate.castShadow = true;
+      agentTorso.add(chestPlate);
+
+      const coreBadge = new THREE.Mesh(new THREE.OctahedronGeometry(0.16, 0), goldTrim);
+      coreBadge.position.set(0, 0.52, -0.34);
+      agentTorso.add(coreBadge);
+
+      // Dynamic tactical cape / coat tail
+      const cape = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.82, 0.08), armorRed);
+      cape.position.set(0, 0.42, 0.34);
+      cape.rotation.x = 0.24;
+      agentTorso.add(cape);
+
+      const agentHead = new THREE.Group();
+      agentHead.position.set(0, 1.12, -0.02);
+      agentTorso.add(agentHead);
+
+      const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.32, 18, 16), darkSuit);
+      helmet.scale.set(0.94, 1.06, 1.0);
+      helmet.castShadow = true;
+      agentHead.add(helmet);
+
+      const agentVisor = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.13, 0.1), visorGlow);
+      agentVisor.position.set(0, 0.02, -0.28);
+      agentHead.add(agentVisor);
+
+      const crest = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.24, 0.56), goldTrim);
+      crest.position.set(0, 0.38, 0.02);
+      agentHead.add(crest);
+
+      function makeAgentLimb(isArm, side) {
+        const upperPivot = new THREE.Group();
+        const lowerPivot = new THREE.Group();
+        if (isArm) {
+          upperPivot.position.set(side * 0.5, 0.78, 0);
+          const uMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.34, 12), armorRed);
+          uMesh.position.y = -0.17;
+          lowerPivot.position.y = -0.34;
+          const lMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.08, 0.32, 12), darkSuit);
+          lMesh.position.y = -0.16;
+          lowerPivot.add(lMesh);
+          upperPivot.add(uMesh, lowerPivot);
+          agentTorso.add(upperPivot);
+        } else {
+          upperPivot.position.set(side * 0.2, 0.94, 0);
+          const uMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.145, 0.115, 0.44, 12), darkSuit);
+          uMesh.position.y = -0.22;
+          lowerPivot.position.y = -0.44;
+          const lMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.09, 0.42, 12), armorRed);
+          lMesh.position.y = -0.21;
+          const boot = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.14, 0.42), darkSuit);
+          boot.position.set(0, -0.44, -0.05);
+          lowerPivot.add(lMesh, boot);
+          upperPivot.add(uMesh, lowerPivot);
+          agent.add(upperPivot);
+        }
+        return { upper: upperPivot, lower: lowerPivot };
+      }
+
+      const aArmL = makeAgentLimb(true, -1);
+      const aArmR = makeAgentLimb(true, 1);
+      const aLegL = makeAgentLimb(false, -1);
+      const aLegR = makeAgentLimb(false, 1);
+
+      // 2. Organic-Articulated 4-Legged Cyber Watchdog with Head, Ears & Tail
+      const dog = new THREE.Group();
+      dog.position.set(0.56, 0, -0.25);
+
+      const dogMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.55, roughness: 0.32 });
+      const dogAccent = new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xdc2626, emissiveIntensity: 0.45 });
+
+      const dogTorso = createCapsuleMesh(0.24, 0.56, dogMat, 16, 12);
+      dogTorso.rotation.x = Math.PI / 2;
+      dogTorso.position.y = 0.62;
+      dogTorso.castShadow = true;
+      dog.add(dogTorso);
+
+      const dogHeadPivot = new THREE.Group();
+      dogHeadPivot.position.set(0, 0.74, -0.42);
+      dog.add(dogHeadPivot);
+
+      const dogHead = new THREE.Mesh(new THREE.SphereGeometry(0.23, 14, 14), dogMat);
+      dogHead.scale.set(0.95, 0.9, 1.25);
+      dogHead.position.set(0, 0.06, -0.14);
+      const dogEye = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.08, 0.08), dogAccent);
+      dogEye.position.set(0, 0.1, -0.39);
+      const earL = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.24, 8), dogAccent);
+      earL.position.set(-0.14, 0.26, -0.06);
+      earL.rotation.x = -0.35;
+      const earR = earL.clone();
+      earR.position.x = 0.14;
+      dogHeadPivot.add(dogHead, dogEye, earL, earR);
+
+      const dogTail = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.08, 0.38, 10), dogAccent);
+      dogTail.position.set(0, 0.78, 0.46);
+      dogTail.rotation.x = 0.75;
+      dog.add(dogTail);
+
+      function makeDogLeg(xOff, zOff) {
+        const hip = new THREE.Group();
+        hip.position.set(xOff, 0.54, zOff);
+        const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.06, 0.28, 10), dogMat);
+        upper.position.y = -0.14;
+        const knee = new THREE.Group();
+        knee.position.y = -0.28;
+        const lower = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.045, 0.26, 10), dogAccent);
+        lower.position.y = -0.13;
+        knee.add(lower);
+        hip.add(upper, knee);
+        dog.add(hip);
+        return { hip, knee };
+      }
+
+      const dLegFL = makeDogLeg(-0.18, -0.28);
+      const dLegFR = makeDogLeg(0.18, -0.28);
+      const dLegBL = makeDogLeg(-0.18, 0.28);
+      const dLegBR = makeDogLeg(0.18, 0.28);
+
+      chaser.add(agent, dog);
+      chaser.userData = {
+        guard: agent,
+        agentTorso,
+        agentHead,
+        cape,
+        aArmL,
+        aArmR,
+        legL: aLegL.upper,
+        legR: aLegR.upper,
+        aLegL,
+        aLegR,
+        dog,
+        dogTorso,
+        dogHeadPivot,
+        dogTail,
+        dLegFL,
+        dLegFR,
+        dLegBL,
+        dLegBR
+      };
+      return chaser;
+    }
+
+    let playerMesh = createCharacterMesh(saveData.selectedChar);
+    scene.add(playerMesh);
+
+    const chaserMesh = createChaserGroup();
+    scene.add(chaserMesh);
+
+    function rebuildPlayerCharacter(charId) {
+      const pos = playerMesh.position.clone();
+      scene.remove(playerMesh);
+      playerMesh = createCharacterMesh(charId);
+      playerMesh.position.copy(pos);
+      scene.add(playerMesh);
+    }
+
+    // ----------------------------------------------------------------------------
+    // 7. NATURAL AERODYNAMIC MAGLEV DATA TRAINS, DRONES, RAMPS & COLLECTIBLES
+    // ----------------------------------------------------------------------------
+    const obstacles = [];
+    const coins = [];
+    const powerups = [];
+    const specials = []; // Mystery .ZIP boxes & Word Hunt Letters
+    const particles = [];
+    const spinningFans = [];
+
+    const TRAIN_HEIGHT = 3.3;
+    const TRAIN_WIDTH = 2.45;
+
+    const coinGeo = new THREE.CylinderGeometry(0.46, 0.46, 0.14, 18);
+    coinGeo.rotateX(Math.PI / 2);
+    const coinEdgeMat = new THREE.MeshStandardMaterial({
+      color: 0xfacc15,
+      emissive: 0xd97706,
+      emissiveIntensity: 0.4,
+      metalness: 0.75,
+      roughness: 0.2
+    });
+    const coinFaceMat = new THREE.MeshStandardMaterial({
+      map: textures.bitFace,
+      emissive: 0xf59e0b,
+      emissiveIntensity: 0.25,
+      metalness: 0.5,
+      roughness: 0.25
+    });
+    const bitMaterials = [coinEdgeMat, coinFaceMat, coinFaceMat];
+
+    function createTrainMesh(variantIdx, hasRamp = false, isMoving = false) {
+      const group = new THREE.Group();
+      const length = 14;
+      const sideTex = textures.trainSides[variantIdx % textures.trainSides.length];
+
+      // Color palette inspired by the reference subway coach + optional cyber accent
+      const palettes = [
+        { orange: 0xf97316, lime: 0xa3e635, roof: 0xbef264, skirt: 0x476985, winTop: 0xbae6fd, winBot: 0x38bdf8 },
+        { orange: 0xea580c, lime: 0x84cc16, roof: 0xd9f99d, skirt: 0x3f5e78, winTop: 0xe0f2fe, winBot: 0x22d3ee },
+        { orange: 0xf59e0b, lime: 0xa3e635, roof: 0xfef08a, skirt: 0x4b6b84, winTop: 0xbae6fd, winBot: 0x60a5fa }
+      ];
+      const pal = palettes[variantIdx % palettes.length];
+
+      const orangeMat = new THREE.MeshStandardMaterial({ color: pal.orange, roughness: 0.34, metalness: 0.18 });
+      const limeMat = new THREE.MeshStandardMaterial({ color: pal.lime, roughness: 0.38, metalness: 0.15 });
+      const roofMat = new THREE.MeshStandardMaterial({ color: pal.roof, roughness: 0.35, metalness: 0.16 });
+      const skirtMat = new THREE.MeshStandardMaterial({ color: pal.skirt, roughness: 0.45, metalness: 0.35 });
+      const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6, metalness: 0.5 });
+      const glassMat = new THREE.MeshStandardMaterial({
+        color: pal.winBot,
+        emissive: pal.winTop,
+        emissiveIntensity: isMoving ? 0.45 : 0.22,
+        roughness: 0.12,
+        metalness: 0.35
+      });
+      const frameMat = new THREE.MeshStandardMaterial({ color: 0xc2410c, roughness: 0.45, metalness: 0.2 });
+
+      // Bogies / Wheel Trucks & Blue-Slate Undercarriage Skirt (matching reference image)
+      [-4.4, 4.4].forEach(bz => {
+        const truck = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.42, 2.2), wheelMat);
+        truck.position.set(0, 0.26, bz);
+        group.add(truck);
+
+        [-0.75, 0.75].forEach(wz => {
+          const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 1.92, 14), wheelMat);
+          wheel.rotation.z = Math.PI / 2;
+          wheel.position.set(0, 0.32, bz + wz);
+          group.add(wheel);
+        });
+      });
+
+      const skirt = new THREE.Mesh(new THREE.BoxGeometry(TRAIN_WIDTH - 0.08, 0.46, length - 0.3), skirtMat);
+      skirt.position.set(0, 0.56, 0);
+      skirt.castShadow = true;
+      skirt.receiveShadow = true;
+      group.add(skirt);
+
+      // Tapered coach body: lower lime band, wide orange mid-section, sloped upper & lime-yellow roof
+      const lowerBand = new THREE.Mesh(new THREE.BoxGeometry(TRAIN_WIDTH, 0.68, length), limeMat);
+      lowerBand.position.set(0, 1.12, 0);
+      lowerBand.castShadow = true;
+      lowerBand.receiveShadow = true;
+      group.add(lowerBand);
+
+      const midBody = new THREE.Mesh(new THREE.BoxGeometry(TRAIN_WIDTH - 0.06, 1.28, length), orangeMat);
+      midBody.position.set(0, 2.1, 0);
+      midBody.castShadow = true;
+      midBody.receiveShadow = true;
+      group.add(midBody);
+
+      // Chamfered upper shoulder & roof cap
+      const upperBevel = new THREE.Mesh(new THREE.BoxGeometry(TRAIN_WIDTH - 0.32, 0.36, length), orangeMat);
+      upperBevel.position.set(0, 2.86, 0);
+      upperBevel.castShadow = true;
+      group.add(upperBevel);
+
+      const roofCap = new THREE.Mesh(new THREE.BoxGeometry(TRAIN_WIDTH - 0.62, 0.24, length), roofMat);
+      roofCap.position.set(0, 3.12, 0);
+      roofCap.castShadow = true;
+      roofCap.receiveShadow = true;
+      group.add(roofCap);
+
+      // Side Windows, Center Double Door & Tech Badge along both sides
+      [-1, 1].forEach(sideSign => {
+        const xFace = sideSign * (TRAIN_WIDTH / 2 - 0.01);
+        const rotY = sideSign > 0 ? Math.PI / 2 : -Math.PI / 2;
+
+        // Center sliding door panel + lime bottom trim
+        const centerDoor = new THREE.Mesh(new THREE.BoxGeometry(1.55, 1.88, 0.05), orangeMat);
+        centerDoor.position.set(xFace, 1.72, 0);
+        centerDoor.rotation.y = rotY;
+        const doorLime = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.56, 0.06), limeMat);
+        doorLime.position.set(xFace, 1.06, 0);
+        doorLime.rotation.y = rotY;
+        const doorSplit = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.86, 0.07), frameMat);
+        doorSplit.position.set(xFace, 1.72, 0);
+        doorSplit.rotation.y = rotY;
+        group.add(centerDoor, doorLime, doorSplit);
+
+        // Passenger windows flanking the center door
+        const winZOffsets = [-4.9, -2.5, 2.5, 4.9];
+        winZOffsets.forEach(wz => {
+          const bezel = new THREE.Mesh(new THREE.BoxGeometry(0.92, 1.08, 0.05), frameMat);
+          bezel.position.set(xFace, 2.18, wz);
+          bezel.rotation.y = rotY;
+
+          const pane = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.88, 0.07), glassMat);
+          pane.position.set(xFace, 2.18, wz);
+          pane.rotation.y = rotY;
+          group.add(bezel, pane);
+        });
+      });
+
+      // Front & Rear End Cab Doors with tall window & lime lower band
+      [-1, 1].forEach(endSign => {
+        const zEnd = endSign * (length / 2 + 0.01);
+        const endLime = new THREE.Mesh(new THREE.BoxGeometry(TRAIN_WIDTH - 0.06, 0.66, 0.05), limeMat);
+        endLime.position.set(0, 1.12, zEnd);
+
+        const endDoorFrame = new THREE.Mesh(new THREE.BoxGeometry(0.98, 1.95, 0.06), frameMat);
+        endDoorFrame.position.set(0, 1.78, zEnd);
+
+        const endWindow = new THREE.Mesh(new THREE.BoxGeometry(0.66, 1.12, 0.08), glassMat);
+        endWindow.position.set(0, 2.12, zEnd);
+        group.add(endLime, endDoorFrame, endWindow);
+      });
+
+      // Subtle hardware side tag decal on lower/mid hull
+      const badgeMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(2.2, 0.55),
+        new THREE.MeshBasicMaterial({ map: sideTex, transparent: true, opacity: 0.72 })
+      );
+      badgeMesh.position.set(TRAIN_WIDTH / 2 + 0.03, 2.12, -3.7);
+      badgeMesh.rotation.y = Math.PI / 2;
+      group.add(badgeMesh);
+
+      // High-beam Headlights + Lane Warning Carpet for Moving Trains
+      if (isMoving) {
+        [-0.68, 0.68].forEach(lx => {
+          const hl = new THREE.Mesh(new THREE.CircleGeometry(0.24, 12), new THREE.MeshBasicMaterial({ color: 0xfef08a }));
+          hl.position.set(lx, 1.05, length / 2 + 0.08);
+          group.add(hl);
+        });
+        const warnCarpet = new THREE.Mesh(
+          new THREE.PlaneGeometry(2.3, 24),
+          new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.26 })
+        );
+        warnCarpet.rotation.x = -Math.PI / 2;
+        warnCarpet.position.set(0, 0.03, length / 2 + 12);
+        group.add(warnCarpet);
+      }
+      // Boarding Ramp attached smoothly to the front (+Z side facing the approaching player)
+      let rampLength = 0;
+      if (hasRamp) {
+        rampLength = 6.2;
+        const rampGeo = new THREE.BoxGeometry(TRAIN_WIDTH - 0.06, 0.34, Math.hypot(TRAIN_HEIGHT, rampLength));
+        const rampMat = new THREE.MeshStandardMaterial({
+          color: 0x10b981,
+          emissive: 0x059669,
+          emissiveIntensity: 0.35,
+          roughness: 0.38
+        });
+        const ramp = new THREE.Mesh(rampGeo, rampMat);
+        // Positive rotation.x tilts the +Z end down to y=0 and connects the -Z end up to y=TRAIN_HEIGHT
+        const angle = Math.atan2(TRAIN_HEIGHT, rampLength);
+        ramp.rotation.x = angle;
+        ramp.position.set(0, TRAIN_HEIGHT / 2, length / 2 + rampLength / 2 - 0.1);
+        ramp.castShadow = true;
+        ramp.receiveShadow = true;
+        group.add(ramp);
+      }
+
+      return { mesh: group, length, rampLength };
+    }
+
+    function createBarrierMesh(type) {
+      const group = new THREE.Group();
+      const postMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.7 });
+      const boardMat = new THREE.MeshStandardMaterial({ map: textures.barrier, roughness: 0.38 });
+
+      if (type === 'DRONE') {
+        // Hovering Security Patrol Drone (Jump over or roll under!)
+        const chassis = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.65, 0.5, 0.36, 16),
+          new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.7, roughness: 0.2 })
+        );
+        chassis.position.y = 1.55;
+        const eye = new THREE.Mesh(
+          new THREE.SphereGeometry(0.22, 12, 12),
+          new THREE.MeshBasicMaterial({ color: 0xef4444 })
+        );
+        eye.position.set(0, 1.55, 0.55);
+        const rotorBar = new THREE.Mesh(
+          new THREE.BoxGeometry(1.9, 0.06, 0.16),
+          new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
+        );
+        rotorBar.position.y = 1.82;
+        spinningFans.push(rotorBar);
+        group.add(chassis, eye, rotorBar);
+        return group;
+      }
+
+      [-1.05, 1.05].forEach(px => {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, type === 'HIGH' ? 2.8 : 1.15, 0.18), postMat);
+        post.position.set(px, (type === 'HIGH' ? 2.8 : 1.15) / 2, 0);
+        post.castShadow = true;
+        group.add(post);
+      });
+
+      if (type === 'LOW') {
+        const laserBar = new THREE.Mesh(
+          new THREE.BoxGeometry(2.35, 0.48, 0.18),
+          new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xdc2626, emissiveIntensity: 0.65 })
+        );
+        laserBar.position.set(0, 0.82, 0);
+        laserBar.castShadow = true;
+        group.add(laserBar);
+      } else {
+        const topPlank = new THREE.Mesh(new THREE.BoxGeometry(2.45, 1.85, 0.24), boardMat);
+        topPlank.position.set(0, 2.25, 0);
+        topPlank.castShadow = true;
+        group.add(topPlank);
+      }
+      return group;
+    }
+
+    function spawnCoin(laneIdx, y, z) {
+      const mesh = new THREE.Mesh(coinGeo, bitMaterials);
+      mesh.position.set(LANES[laneIdx], y, z);
+      scene.add(mesh);
+      coins.push({ mesh, lane: laneIdx, collected: false });
+    }
+
+    function spawnCoinLine(laneIdx, startZ, count, spacing = 2.4, y = 1.0) {
+      for (let i = 0; i < count; i++) {
+        spawnCoin(laneIdx, y, startZ - i * spacing);
+      }
+    }
+
+    function spawnCoinArc(laneIdx, centerZ, yBase = 1.0, peakHeight = 2.4) {
+      const offsets = [-4, -2, 0, 2, 4];
+      offsets.forEach((dz, i) => {
+        const t = (i / (offsets.length - 1)) * Math.PI;
+        const y = yBase + Math.sin(t) * peakHeight;
+        spawnCoin(laneIdx, y, centerZ + dz);
+      });
+    }
+
+    function spawnPowerup(laneIdx, y, z, forcedType = null) {
+      const types = ['jetpack', 'sneakers', 'magnet', 'multiplier'];
+      const type = forcedType || types[Math.floor(Math.random() * types.length)];
+      const colors = {
+        jetpack: 0xf97316,
+        sneakers: 0x22c55e,
+        magnet: 0x38bdf8,
+        multiplier: 0xa855f7
+      };
+
+      const group = new THREE.Group();
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(0.65, 0.08, 10, 24),
+        new THREE.MeshBasicMaterial({ color: 0xffffff })
+      );
+      const core = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.48, 0),
+        new THREE.MeshStandardMaterial({
+          color: colors[type],
+          emissive: colors[type],
+          emissiveIntensity: 0.45,
+          roughness: 0.2
+        })
+      );
+      group.add(ring, core);
+      group.position.set(LANES[laneIdx], y, z);
+      scene.add(group);
+      powerups.push({ mesh: group, type, collected: false });
+    }
+
+    function spawnSpecialCollectible(laneIdx, y, z) {
+      // Either Mystery .ZIP Box or Next Needed Letter in Word Hunt
+      const nextLetterIdx = wordCollected.findIndex(v => !v);
+      if (nextLetterIdx !== -1 && Math.random() < 0.65) {
+        const letter = currentWord[nextLetterIdx];
+        const mat = new THREE.MeshStandardMaterial({
+          map: textures.letters[letter] || textures.bitFace,
+          emissive: 0x0284c7,
+          emissiveIntensity: 0.35
+        });
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.92, 0.92), mat);
+        mesh.position.set(LANES[laneIdx], y, z);
+        scene.add(mesh);
+        specials.push({ mesh, kind: 'LETTER', letter, letterIdx: nextLetterIdx });
+      } else {
+        const mat = new THREE.MeshStandardMaterial({
+          map: textures.zipBox,
+          emissive: 0x9333ea,
+          emissiveIntensity: 0.4
+        });
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.98, 0.98), mat);
+        mesh.position.set(LANES[laneIdx], y, z);
+        scene.add(mesh);
+        specials.push({ mesh, kind: 'ZIP' });
+      }
+    }
+
+    function spawnBurst(pos, colorHex, count = 14, speedScale = 1) {
+      const mat = new THREE.MeshBasicMaterial({ color: colorHex });
+      const geo = new THREE.BoxGeometry(0.18, 0.18, 0.18);
+      for (let i = 0; i < count; i++) {
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.copy(pos);
+        const angle = Math.random() * Math.PI * 2;
+        const spd = (2 + Math.random() * 6) * speedScale;
+        scene.add(mesh);
+        particles.push({
+          mesh,
+          vel: new THREE.Vector3(Math.cos(angle) * spd, 2.5 + Math.random() * 5 * speedScale, Math.sin(angle) * spd),
+          life: 0.45 + Math.random() * 0.25,
+          maxLife: 0.7
+        });
+      }
+    }
+
+    // Wave Pattern Generator
+    let nextSpawnZ = -42;
+
+    function spawnPatternRow(zStart) {
+      const patternRoll = Math.random();
+
+      if (patternRoll < 0.30) {
+        // Pattern 1: Two Hardware Racks + One Open/Barrier Lane (with Ramp option)
+        const openLane = Math.floor(Math.random() * 3);
+        const rampLane = (openLane + 1) % 3;
+        const blockedLane = (openLane + 2) % 3;
+
+        const t1 = createTrainMesh(Math.floor(Math.random() * 3), true, false);
+        // Place ramp at front (+Z) so the player runs up the ramp onto the train roof
+        t1.mesh.position.set(LANES[rampLane], 0, zStart - t1.length / 2 - t1.rampLength);
+        scene.add(t1.mesh);
+        obstacles.push({
+          type: 'TRAIN',
+          mesh: t1.mesh,
+          lane: rampLane,
+          zCenter: t1.mesh.position.z,
+          halfLength: t1.length / 2,
+          height: TRAIN_HEIGHT,
+          hasRamp: true,
+          rampLength: t1.rampLength,
+          speedOffset: 0
+        });
+        // Coins leading up the ramp and along the roof
+        spawnCoinLine(rampLane, zStart + 1.0, 3, 2.0, 1.3);
+        spawnCoinLine(rampLane, zStart - t1.rampLength - 1.5, 4, 2.6, TRAIN_HEIGHT + 0.9);
+
+        const isMoving = distanceRun > 140 && Math.random() < 0.35;
+        if (isMoving) sound.playTrainWarning();
+        const t2 = createTrainMesh(Math.floor(Math.random() * 3), false, isMoving);
+        t2.mesh.position.set(LANES[blockedLane], 0, zStart - t2.length / 2 - 2);
+        scene.add(t2.mesh);
+        obstacles.push({
+          type: 'TRAIN',
+          mesh: t2.mesh,
+          lane: blockedLane,
+          zCenter: t2.mesh.position.z,
+          halfLength: t2.length / 2,
+          height: TRAIN_HEIGHT,
+          hasRamp: false,
+          rampLength: 0,
+          speedOffset: isMoving ? 15 : 0
+        });
+
+        if (Math.random() < 0.5) {
+          spawnCoinLine(openLane, zStart - 2, 5, 2.4, 1.0);
+          if (Math.random() < 0.25) {
+            spawnSpecialCollectible(openLane, 1.15, zStart - 15);
+          }
+        } else {
+          const bType = Math.random() < 0.5 ? 'LOW' : 'HIGH';
+          const bar = createBarrierMesh(bType);
+          bar.position.set(LANES[openLane], 0, zStart - 6);
+          scene.add(bar);
+          obstacles.push({
+            type: bType,
+            mesh: bar,
+            lane: openLane,
+            zCenter: zStart - 6,
+            halfLength: 0.45,
+            height: bType === 'LOW' ? 1.15 : 2.8,
+            minY: bType === 'LOW' ? 0 : 1.25
+          });
+          if (bType === 'LOW') spawnCoinArc(openLane, zStart - 6);
+        }
+
+        if (Math.random() < 0.26) {
+          spawnPowerup(blockedLane, TRAIN_HEIGHT + 1.1, t2.mesh.position.z);
+        }
+
+        return 24;
+      } else if (patternRoll < 0.64) {
+        // Pattern 2: Hurdle & Patrol Drone Trio across the 3 lanes
+        const types = ['LOW', 'HIGH', 'DRONE'];
+        types[Math.floor(Math.random() * 3)] = 'OPEN';
+        types.sort(() => Math.random() - 0.5);
+
+        types.forEach((t, laneIdx) => {
+          if (t === 'OPEN') {
+            spawnCoinLine(laneIdx, zStart, 4, 2.4, 1.0);
+            if (Math.random() < 0.18) {
+              spawnPowerup(laneIdx, 1.1, zStart - 11);
+            } else if (Math.random() < 0.22) {
+              spawnSpecialCollectible(laneIdx, 1.15, zStart - 11);
+            }
+          } else {
+            const bar = createBarrierMesh(t);
+            bar.position.set(LANES[laneIdx], 0, zStart - 3);
+            scene.add(bar);
+            obstacles.push({
+              type: t,
+              mesh: bar,
+              lane: laneIdx,
+              zCenter: zStart - 3,
+              halfLength: 0.5,
+              height: t === 'LOW' ? 1.15 : (t === 'DRONE' ? 2.1 : 2.8),
+              minY: t === 'LOW' ? 0 : (t === 'DRONE' ? 1.05 : 1.25),
+              patrol: t === 'DRONE',
+              patrolPhase: Math.random() * Math.PI * 2
+            });
+            if (t === 'LOW') spawnCoinArc(laneIdx, zStart - 3);
+          }
+        });
+        return 17;
+      } else {
+        // Pattern 3: Slalom Moving & Stationary Servers
+        const laneA = Math.floor(Math.random() * 3);
+        const laneB = (laneA + 1) % 3;
+
+        const tA = createTrainMesh(Math.floor(Math.random() * 3), false, false);
+        tA.mesh.position.set(LANES[laneA], 0, zStart - 7);
+        scene.add(tA.mesh);
+        obstacles.push({
+          type: 'TRAIN',
+          mesh: tA.mesh,
+          lane: laneA,
+          zCenter: tA.mesh.position.z,
+          halfLength: tA.length / 2,
+          height: TRAIN_HEIGHT,
+          hasRamp: false,
+          rampLength: 0,
+          speedOffset: 0
+        });
+
+        const isMovingB = distanceRun > 110 && Math.random() < 0.48;
+        if (isMovingB) sound.playTrainWarning();
+        const tB = createTrainMesh(Math.floor(Math.random() * 3), false, isMovingB);
+        tB.mesh.position.set(LANES[laneB], 0, zStart - 19);
+        scene.add(tB.mesh);
+        obstacles.push({
+          type: 'TRAIN',
+          mesh: tB.mesh,
+          lane: laneB,
+          zCenter: tB.mesh.position.z,
+          halfLength: tB.length / 2,
+          height: TRAIN_HEIGHT,
+          hasRamp: false,
+          rampLength: 0,
+          speedOffset: isMovingB ? 16 : 0
+        });
+
+        const safeLane = 3 - laneA - laneB;
+        spawnCoinLine(safeLane, zStart - 2, 7, 2.5, 1.0);
+        if (Math.random() < 0.24) {
+          spawnSpecialCollectible(safeLane, 1.15, zStart - 21);
+        }
+        return 27;
+      }
+    }
+
+    // ----------------------------------------------------------------------------
+    // 8. GAME STATE, WORD HUNT, MISSIONS TRACKER & FLOATING POPUPS
+    // ----------------------------------------------------------------------------
+    let gameState = 'MENU'; // 'MENU' | 'PLAYING' | 'PAUSED' | 'GAMEOVER'
+    let gameSpeed = BASE_SPEED;
+    let score = 0;
+    let runCoins = 0;
+    let runZipBoxes = 0;
+    let distanceRun = 0;
+    let coinCombo = 0;
+    let coinComboTimer = 0;
+    let currentZoneIdx = 0;
+    let startingZoneIdx = 0;
+    let recordLinePassed = false;
+    let recordTargetScore = 0;
+
+    // Data Waves & Firewall Boss State
+    const BOSS_WAVE_INTERVAL = 600;
+    const BOSS_WAVE_DURATION = 14.0;
+    let nextBossDistance = BOSS_WAVE_INTERVAL;
+    let bossWaveActive = false;
+    let bossWaveTimer = 0;
+    let bossWaveNumber = 0;
+    let bossRhythmTimer = 0;
+    let bossRhythmStep = 0;
+
+    // 3D Firewall Boss Mesh hovering ahead of the runner during waves
+    const firewallBossGroup = new THREE.Group();
+    const bossCoreMesh = new THREE.Mesh(
+      new THREE.OctahedronGeometry(1.45, 1),
+      new THREE.MeshStandardMaterial({
+        color: 0xef4444,
+        emissive: 0xdc2626,
+        emissiveIntensity: 0.65,
+        roughness: 0.25,
+        metalness: 0.6
+      })
+    );
+    const bossShieldRing = new THREE.Mesh(
+      new THREE.TorusGeometry(2.15, 0.14, 12, 32),
+      new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+    );
+    const bossOuterRing = new THREE.Mesh(
+      new THREE.TorusGeometry(2.65, 0.09, 10, 32),
+      new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
+    );
+    bossOuterRing.rotation.x = Math.PI / 3;
+    firewallBossGroup.add(bossCoreMesh, bossShieldRing, bossOuterRing);
+    firewallBossGroup.position.set(0, 4.4, -22);
+    firewallBossGroup.visible = false;
+    scene.add(firewallBossGroup);
+
+    // Daily / Run Word Hunt State
+    let currentWord = WORDS_POOL[Math.floor(Math.random() * WORDS_POOL.length)];
+    let wordCollected = currentWord.split('').map(() => false);
+
+    const player = {
+      lane: 1,
+      x: 0,
+      y: 0,
+      vy: 0,
+      groundY: 0,
+      isJumping: false,
+      isRolling: false,
+      rollTimer: 0,
+      runCycle: 0,
+      invulnTimer: 0,
+      stumbleCooldown: 0
+    };
+
+    const chaser = {
+      distance: 3.2,
+      targetDistance: 3.2,
+      runCycle: 0
+    };
+
+    const activePowers = {
+      jetpack: { active: false, time: 0, maxTime: 8 },
+      sneakers: { active: false, time: 0, maxTime: 10 },
+      magnet: { active: false, time: 0, maxTime: 10 },
+      multiplier: { active: false, time: 0, maxTime: 10 },
+      hoverboard: { active: false, time: 0, maxTime: 18, cooldown: 0 }
+    };
+
+    let cameraShake = 0;
+    let toastTimeout = null;
+
+    function showToast(msg) {
+      const banner = document.getElementById('toast-banner');
+      const text = document.getElementById('toast-text');
+      text.textContent = msg;
+      banner.classList.remove('opacity-0', '-translate-y-4');
+      banner.classList.add('opacity-100', 'translate-y-0');
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        banner.classList.remove('opacity-100', 'translate-y-0');
+        banner.classList.add('opacity-0', '-translate-y-4');
+      }, 1850);
+    }
+
+    function spawnFloatingPopup(worldPos, text, colorClass = 'text-amber-300') {
+      const layer = document.getElementById('floating-popups-layer');
+      const projected = worldPos.clone().project(camera);
+      const sx = (projected.x * 0.5 + 0.5) * window.innerWidth;
+      const sy = (-projected.y * 0.5 + 0.5) * window.innerHeight;
+
+      const el = document.createElement('div');
+      el.className = `floating-popup text-sm sm:text-lg ${colorClass}`;
+      el.style.left = `${Math.max(40, Math.min(window.innerWidth - 40, sx))}px`;
+      el.style.top = `${Math.max(50, Math.min(window.innerHeight - 50, sy))}px`;
+      el.textContent = text;
+      layer.appendChild(el);
+      setTimeout(() => el.remove(), 860);
+    }
+
+    function trackMissionProgress(type, amount = 1) {
+      let anyJustCompleted = false;
+      saveData.missions.forEach(m => {
+        if (!m.done && m.type === type) {
+          m.progress = Math.min(m.target, m.progress + amount);
+          if (m.progress >= m.target) {
+            m.done = true;
+            anyJustCompleted = true;
+            showToast(`🎯 MISSÃO CONCLUÍDA: ${m.text}!`);
+          }
+        }
+      });
+
+      // Check if all 3 missions in the set are complete -> Level Up Permanent Multiplier!
+      if (anyJustCompleted && saveData.missions.every(m => m.done)) {
+        saveData.permMultiplier = Math.min(10, (saveData.permMultiplier || 1) + 1);
+        saveData.missionSet = (saveData.missionSet || 1) + 1;
+        saveData.missions = generateMissionSet(saveData.missionSet);
+        sound.playPowerup();
+        showToast(`⚡ MULTIPLICADOR PERMANENTE SUBIU PARA x${saveData.permMultiplier}!`);
+      }
+      if (anyJustCompleted) {
+        persistSaveData();
+      }
+    }
+
+    // ----------------------------------------------------------------------------
+    // 9. PLAYER ACTIONS (LANE SWITCH, JUMP, ROLL / FAST-FALL, HOVERBOARD)
+    // ----------------------------------------------------------------------------
+    function moveLeft() {
+      if (gameState !== 'PLAYING') return;
+      if (player.lane > 0) {
+        player.lane--;
+        sound.playSwipe();
+      }
+    }
+
+    function moveRight() {
+      if (gameState !== 'PLAYING') return;
+      if (player.lane < 2) {
+        player.lane++;
+        sound.playSwipe();
+      }
+    }
+
+    function triggerJump() {
+      if (gameState !== 'PLAYING' || activePowers.jetpack.active) return;
+      if (!player.isJumping || player.y <= player.groundY + 0.08) {
+        const hasSneakers = activePowers.sneakers.active;
+        player.vy = hasSneakers ? 23.5 : 16.8;
+        player.isJumping = true;
+        player.isRolling = false;
+        player.rollTimer = 0;
+        sound.playJump(hasSneakers);
+        trackMissionProgress('jumps', 1);
+        spawnBurst(new THREE.Vector3(player.x, player.y + 0.2, 0), 0x38bdf8, 8, 0.6);
+      }
+    }
+
+    function triggerRoll() {
+      if (gameState !== 'PLAYING' || activePowers.jetpack.active) return;
+      if (player.isJumping) {
+        player.vy = -36; // Competitive Fast-Fall cancel!
+      }
+      if (!player.isRolling) {
+        trackMissionProgress('rolls', 1);
+      }
+      player.isRolling = true;
+      player.rollTimer = 0.68;
+      sound.playRoll();
+      spawnBurst(new THREE.Vector3(player.x, player.y + 0.2, 0), 0x22d3ee, 8, 0.5);
+    }
+
+    function activateHoverboard() {
+      if (gameState !== 'PLAYING') return;
+      if (activePowers.hoverboard.active) {
+        showToast('Prancha Cyber já está ativa!');
+        return;
+      }
+      if (activePowers.hoverboard.cooldown > 0) {
+        showToast(`Recarregando Prancha (${Math.ceil(activePowers.hoverboard.cooldown)}s)`);
+        return;
+      }
+      const boardCfg = BOARDS_DATA.find(b => b.id === saveData.selectedBoard) || BOARDS_DATA[0];
+      activePowers.hoverboard.active = true;
+      activePowers.hoverboard.maxTime = boardCfg.duration;
+      activePowers.hoverboard.time = boardCfg.duration;
+      playerMesh.userData.boardGroup.visible = true;
+      sound.playHoverboard();
+      trackMissionProgress('boards', 1);
+      spawnBurst(new THREE.Vector3(player.x, player.y + 0.3, 0), boardCfg.trimColor, 20, 1.2);
+      showToast(`${boardCfg.icon} ${boardCfg.name.toUpperCase()} ATIVA!`);
+    }
+
+    function activatePowerup(type) {
+      const upgCfg = UPGRADES_DATA.find(u => u.id === type);
+      const lvl = saveData.upgrades[type] || 0;
+      const duration = upgCfg.baseDuration + lvl * upgCfg.perLevel;
+
+      activePowers[type].active = true;
+      activePowers[type].time = duration;
+      activePowers[type].maxTime = duration;
+      sound.playPowerup();
+      trackMissionProgress('powerups', 1);
+
+      if (type === 'jetpack') {
+        player.isJumping = false;
+        player.isRolling = false;
+        player.vy = 0;
+        playerMesh.userData.jetpackGroup.visible = true;
+        const aerialLane = player.lane;
+        for (let i = 1; i <= 18; i++) {
+          spawnCoin(aerialLane, 10.5, -14 - i * 3.2);
+        }
+        showToast('🚀 OVERCLOCK FIBRA ÓPTICA!');
+      } else if (type === 'sneakers') {
+        playerMesh.userData.leftSuperSole.visible = true;
+        playerMesh.userData.rightSuperSole.visible = true;
+        showToast('⚡ BOTAS PING 0ms!');
+      } else if (type === 'magnet') {
+        playerMesh.userData.magnetHalo.visible = true;
+        showToast('🧲 ALGORITMO INDEXADOR DE BITS!');
+      } else if (type === 'multiplier') {
+        showToast('💎 PROCESSAMENTO DUAL-CORE 2X!');
+      }
+    }
+
+    // ----------------------------------------------------------------------------
+    // 10. INPUT HANDLERS (TOUCH SWIPE, DOUBLE-TAP & KEYBOARD)
+    // ----------------------------------------------------------------------------
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchMoved = false;
+    let lastTapTime = 0;
+
+    renderer.domElement.addEventListener('touchstart', e => {
+      if (e.touches.length > 0) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchMoved = false;
+      }
+    }, { passive: true });
+
+    renderer.domElement.addEventListener('touchmove', e => {
+      if (gameState !== 'PLAYING' || touchMoved || e.touches.length === 0) return;
+      const dx = e.touches[0].clientX - touchStartX;
+      const dy = e.touches[0].clientY - touchStartY;
+      const threshold = 26;
+
+      if (Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
+        touchMoved = true;
+        if (Math.abs(dx) > Math.abs(dy)) {
+          if (dx < 0) moveLeft();
+          else moveRight();
+        } else {
+          if (dy < 0) triggerJump();
+          else triggerRoll();
+        }
+      }
+    }, { passive: true });
+
+    renderer.domElement.addEventListener('touchend', () => {
+      if (gameState !== 'PLAYING') return;
+      if (!touchMoved) {
+        const now = Date.now();
+        if (now - lastTapTime < 300) {
+          activateHoverboard();
+          lastTapTime = 0;
+        } else {
+          lastTapTime = now;
+        }
+      }
+    });
+
+    renderer.domElement.addEventListener('dblclick', () => {
+      if (gameState === 'PLAYING') activateHoverboard();
+    });
+
+    window.addEventListener('keydown', e => {
+      if (e.repeat) return;
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+        moveLeft();
+      } else if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+        moveRight();
+      } else if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+        triggerJump();
+      } else if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+        triggerRoll();
+      } else if (e.code === 'Space') {
+        if (gameState === 'PLAYING') {
+          e.preventDefault();
+          activateHoverboard();
+        } else if (gameState === 'MENU') {
+          startNewRun();
+        }
+      } else if (e.code === 'Escape' || e.code === 'KeyP') {
+        if (gameState === 'PLAYING') pauseGame();
+        else if (gameState === 'PAUSED') resumeGame();
+      }
+    });
+
+    // ----------------------------------------------------------------------------
+    // 11. COLLISION RESOLUTION, STUMBLE & GAME OVER LOGIC
+    // ----------------------------------------------------------------------------
+    function clearWorldEntities() {
+      obstacles.forEach(o => scene.remove(o.mesh));
+      obstacles.length = 0;
+      coins.forEach(c => scene.remove(c.mesh));
+      coins.length = 0;
+      powerups.forEach(p => scene.remove(p.mesh));
+      powerups.length = 0;
+      specials.forEach(s => scene.remove(s.mesh));
+      specials.length = 0;
+      particles.forEach(pt => scene.remove(pt.mesh));
+      particles.length = 0;
+      spinningFans.length = 0;
+      bossWaveActive = false;
+      bossWaveTimer = 0;
+      firewallBossGroup.visible = false;
+    }
+
+    function triggerBossWave() {
+      bossWaveNumber++;
+      bossWaveActive = true;
+      bossWaveTimer = BOSS_WAVE_DURATION;
+      bossRhythmTimer = 0;
+      bossRhythmStep = 0;
+      firewallBossGroup.visible = true;
+      sound.playTrainWarning();
+      showToast(`🔥 ONDA DE DADOS #${bossWaveNumber}: FIREWALL BOSS ATIVO!`);
+    }
+
+    function updateBossWave(dt) {
+      if (!bossWaveActive && distanceRun >= nextBossDistance) {
+        nextBossDistance += BOSS_WAVE_INTERVAL;
+        triggerBossWave();
+      }
+
+      if (!bossWaveActive) {
+        firewallBossGroup.visible = false;
+        return;
+      }
+
+      bossWaveTimer -= dt;
+      bossRhythmTimer -= dt;
+
+      // Animate hovering Firewall Boss across lanes
+      const waveClock = performance.now() * 0.0028;
+      firewallBossGroup.visible = true;
+      firewallBossGroup.position.x = Math.sin(waveClock) * LANE_WIDTH * 1.15;
+      firewallBossGroup.position.y = 4.2 + Math.cos(waveClock * 1.8) * 0.55;
+      firewallBossGroup.position.z = -20 + Math.sin(waveClock * 1.2) * 2.2;
+      bossCoreMesh.rotation.y += dt * 3.5;
+      bossCoreMesh.rotation.x += dt * 2.2;
+      bossShieldRing.rotation.z += dt * 4.5;
+      bossOuterRing.rotation.y -= dt * 3.2;
+
+      // Rhythmic Bit waves & Firewall Barrier pulses
+      if (bossRhythmTimer <= 0) {
+        bossRhythmTimer = 0.72;
+        const lanePattern = bossRhythmStep % 3;
+        const altLane = (bossRhythmStep + 1) % 3;
+        spawnCoin(lanePattern, 1.15, -52);
+        spawnCoin(altLane, 2.35, -52);
+
+        if (bossRhythmStep % 4 === 3) {
+          const hazardLane = (bossRhythmStep + 2) % 3;
+          const bType = Math.random() < 0.5 ? 'LOW' : 'DRONE';
+          const bar = createBarrierMesh(bType);
+          bar.position.set(LANES[hazardLane], 0, -56);
+          scene.add(bar);
+          obstacles.push({
+            type: bType,
+            mesh: bar,
+            lane: hazardLane,
+            zCenter: -56,
+            halfLength: 0.5,
+            height: bType === 'LOW' ? 1.15 : 2.1,
+            minY: bType === 'LOW' ? 0 : 1.05,
+            patrol: bType === 'DRONE',
+            patrolPhase: Math.random() * Math.PI * 2
+          });
+        }
+        bossRhythmStep++;
+      }
+
+      if (bossWaveTimer <= 0) {
+        bossWaveActive = false;
+        bossWaveTimer = 0;
+        firewallBossGroup.visible = false;
+        const bonusBits = 45 + bossWaveNumber * 15;
+        runCoins += bonusBits;
+        saveData.totalBitsMined = (saveData.totalBitsMined || 0) + bonusBits;
+        score += 600 * bossWaveNumber;
+        persistSaveData();
+        sound.playPowerup();
+        spawnBurst(new THREE.Vector3(player.x, player.y + 1.5, -6), 0xfacc15, 24, 1.4);
+        showToast(`🛡️ FIREWALL SUPERADO! +${bonusBits} BITS BÔNUS!`);
+      }
+    }
+
+    function handleHoverboardCrashSave(obs) {
+      activePowers.hoverboard.active = false;
+      activePowers.hoverboard.time = 0;
+      activePowers.hoverboard.cooldown = 6;
+      playerMesh.userData.boardGroup.visible = false;
+      player.invulnTimer = 1.4;
+      cameraShake = 0.75;
+      sound.playCrash();
+      spawnBurst(new THREE.Vector3(player.x, player.y + 0.8, 0), 0x22d3ee, 28, 1.5);
+      showToast('🛡️ FIREWALL DA PRANCHA BLOQUEOU O CRASH!');
+
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        if (Math.abs(obstacles[i].zCenter) < 22) {
+          scene.remove(obstacles[i].mesh);
+          obstacles.splice(i, 1);
+        }
+      }
+    }
+
+    function triggerStumble(reasonText) {
+      if (player.stumbleCooldown > 0 || player.invulnTimer > 0) return;
+      player.stumbleCooldown = 0.9;
+      cameraShake = 0.45;
+      sound.playStumble();
+      spawnBurst(new THREE.Vector3(player.x, player.y + 1, 0), 0xfacc15, 12, 0.9);
+
+      if (chaser.distance < 6.5) {
+        endRun(reasonText);
+      } else {
+        chaser.distance = 2.6;
+        chaser.targetDistance = 15.5;
+        showToast('⚠️ ALERTA! O Antivírus rastreou você!');
+      }
+    }
+
+    function endRun(reason = 'Erro fatal no barramento!') {
+      gameState = 'GAMEOVER';
+      sound.stopMusic();
+      sound.playCrash();
+      cameraShake = 0.95;
+      spawnBurst(new THREE.Vector3(player.x, player.y + 1, 0), 0xf43f5e, 26, 1.4);
+
+      const finalScore = Math.floor(score);
+      const isNewRecord = finalScore > saveData.highScore;
+      if (isNewRecord) {
+        saveData.highScore = finalScore;
+      }
+      const runDistInt = Math.floor(distanceRun);
+      if (runDistInt > (saveData.bestDistance || 0)) {
+        saveData.bestDistance = runDistInt;
+      }
+      saveData.totalBitsMined = (saveData.totalBitsMined || 0) + runCoins;
+      saveData.coins += runCoins;
+      persistSaveData();
+
+      document.getElementById('hud').classList.add('hidden');
+      document.getElementById('gameover-screen').classList.remove('hidden');
+      document.getElementById('gameover-reason').textContent = reason;
+      document.getElementById('go-score').textContent = finalScore.toLocaleString('pt-BR');
+      document.getElementById('go-coins').textContent = `+${runCoins} BITS`;
+      document.getElementById('go-best').textContent = saveData.highScore.toLocaleString('pt-BR');
+      document.getElementById('go-total-coins').textContent = `${saveData.coins.toLocaleString('pt-BR')} BITS`;
+
+      // Mystery ZIP Loot Box Section
+      const lootSection = document.getElementById('go-loot-section');
+      if (runZipBoxes > 0) {
+        lootSection.classList.remove('hidden');
+        document.getElementById('go-loot-count').textContent = runZipBoxes;
+        document.getElementById('go-loot-desc').innerHTML = `Você capturou <span class="text-amber-300 font-black">${runZipBoxes}</span> Pacote(s) .ZIP`;
+        document.getElementById('btn-open-loot').disabled = false;
+        document.getElementById('btn-open-loot').textContent = 'Extrair ZIP';
+      } else {
+        lootSection.classList.add('hidden');
+      }
+
+      const badge = document.getElementById('new-record-badge');
+      if (isNewRecord && finalScore > 0) {
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+      refreshMenuStats();
+    }
+
+    // ----------------------------------------------------------------------------
+    // 12. MAIN SIMULATION & RENDER LOOP (BIOMES, SPINNING FANS, TRAILS & PHYSICS)
+    // ----------------------------------------------------------------------------
+    let lastTime = performance.now();
+    let lastTrackedDist = 0;
+
+    function updateDynamicBiomes(dt) {
+      let targetIdx = 0;
+      for (let i = ZONES_DATA.length - 1; i >= 0; i--) {
+        if (distanceRun >= ZONES_DATA[i].minDist) {
+          targetIdx = i;
+          break;
+        }
+      }
+      if (targetIdx !== currentZoneIdx && gameState === 'PLAYING') {
+        currentZoneIdx = targetIdx;
+        showToast(`🌐 ZONA ATUAL: ${ZONES_DATA[targetIdx].name.toUpperCase()}`);
+        const zb = document.getElementById('hud-zone-badge');
+        if (zb) zb.textContent = ZONES_DATA[targetIdx].name;
+      }
+
+      const zCfg = ZONES_DATA[currentZoneIdx];
+      scene.background.lerp(new THREE.Color(zCfg.bg), dt * 1.5);
+      scene.fog.color.lerp(new THREE.Color(zCfg.fog), dt * 1.5);
+      hemiLight.color.lerp(new THREE.Color(zCfg.hemiSky), dt * 1.5);
+      hemiLight.groundColor.lerp(new THREE.Color(zCfg.hemiGround), dt * 1.5);
+
+      const targetNeon = new THREE.Color(zCfg.neonColor);
+      neonStripMaterials.forEach(mat => mat.color.lerp(targetNeon, dt * 1.5));
+      matrixMat.color.lerp(targetNeon, dt * 1.5);
+    }
+
+    function updateGame(dt) {
+      const effectiveSpeed = gameState === 'PLAYING' ? gameSpeed : (gameState === 'MENU' ? 12 : 0);
+
+      // Update Biome Colors
+      updateDynamicBiomes(dt);
+
+      // Animate falling Matrix rain
+      for (let i = 0; i < matrixDrops.length; i++) {
+        const d = matrixDrops[i];
+        d.mesh.position.y -= d.speed * dt;
+        if (d.mesh.position.y < 2) {
+          d.mesh.position.y = 34;
+        }
+      }
+
+      // Spin RGB Fans & Patrol Drone Rotors
+      for (let i = 0; i < spinningFans.length; i++) {
+        spinningFans[i].rotation.y += dt * 16;
+        spinningFans[i].rotation.x += dt * 12;
+      }
+
+      if (effectiveSpeed > 0) {
+        textures.track.offset.y -= (effectiveSpeed * dt) / 14;
+        for (let i = 0; i < sceneryChunks.length; i++) {
+          sceneryChunks[i].position.z += effectiveSpeed * dt;
+          if (sceneryChunks[i].position.z > 36) {
+            sceneryChunks[i].position.z -= sceneryChunks.length * 24;
+          }
+        }
+      }
+
+      if (gameState === 'MENU') {
+        // Live 3D Orbiting Showcase Camera on Home Screen
+        const t = performance.now() * 0.0014;
+        playerMesh.position.set(0, 0, 2.5);
+        playerMesh.rotation.y = Math.sin(t * 1.2) * 0.55;
+        playerMesh.userData.rig.position.y = Math.abs(Math.sin(t * 4)) * 0.08;
+        playerMesh.userData.leftArm.rotation.x = Math.sin(t * 2) * 0.25;
+        playerMesh.userData.rightArm.rotation.x = -Math.sin(t * 2) * 0.25;
+        chaserMesh.visible = false;
+
+        camera.position.lerp(new THREE.Vector3(Math.sin(t) * 2.4, 4.1, 8.6), dt * 4);
+        camera.lookAt(0, 1.7, 1.5);
+        return;
+      }
+
+      if (gameState !== 'PLAYING') return;
+
+      // Speed & Score Progression + Boss Data Waves
+      updateBossWave(dt);
+      const bossSpeedBoost = bossWaveActive ? 7.5 : 0;
+      gameSpeed = Math.min(MAX_SPEED + 8, BASE_SPEED + distanceRun * 0.014 + bossSpeedBoost);
+      distanceRun += gameSpeed * dt;
+      if (Math.floor(distanceRun) > (saveData.bestDistance || 0)) {
+        saveData.bestDistance = Math.floor(distanceRun);
+      }
+
+      if (distanceRun - lastTrackedDist >= 25) {
+        trackMissionProgress('distance', Math.floor(distanceRun - lastTrackedDist));
+        lastTrackedDist = distanceRun;
+      }
+
+      const permMult = saveData.permMultiplier || 1;
+      const distBonus = Math.floor(distanceRun / 500);
+      const baseMult = permMult + distBonus;
+      const totalMult = activePowers.multiplier.active ? baseMult * 2 : baseMult;
+      score += gameSpeed * dt * 1.4 * totalMult;
+
+      // Physical High Score Line on Track
+      if (recordTargetScore > 0 && !recordLinePassed) {
+        const remainingScore = recordTargetScore - score;
+        const approxDist = (remainingScore / (gameSpeed * 1.4 * totalMult)) * gameSpeed;
+        if (approxDist < 120 && approxDist > -15) {
+          recordLineGroup.visible = true;
+          recordLineGroup.position.z = -approxDist;
+          if (approxDist <= 0) {
+            recordLinePassed = true;
+            sound.playPowerup();
+            spawnBurst(new THREE.Vector3(player.x, 1.5, 0), 0xfacc15, 24, 1.3);
+            showToast('🏆 VOCÊ ULTRAPASSOU O RECORDE!');
+          }
+        } else {
+          recordLineGroup.visible = false;
+        }
+      }
+
+      if (coinComboTimer > 0) {
+        coinComboTimer -= dt;
+        if (coinComboTimer <= 0) coinCombo = 0;
+      }
+
+      if (player.invulnTimer > 0) player.invulnTimer -= dt;
+      if (player.stumbleCooldown > 0) player.stumbleCooldown -= dt;
+
+      // Power-up Timers
+      Object.keys(activePowers).forEach(key => {
+        const p = activePowers[key];
+        if (p.cooldown && p.cooldown > 0) {
+          p.cooldown = Math.max(0, p.cooldown - dt);
+        }
+        if (p.active) {
+          p.time -= dt;
+          if (p.time <= 0) {
+            p.active = false;
+            p.time = 0;
+            if (key === 'jetpack') {
+              playerMesh.userData.jetpackGroup.visible = false;
+              player.invulnTimer = 1.5;
+            } else if (key === 'sneakers') {
+              playerMesh.userData.leftSuperSole.visible = false;
+              playerMesh.userData.rightSuperSole.visible = false;
+            } else if (key === 'magnet') {
+              playerMesh.userData.magnetHalo.visible = false;
+            } else if (key === 'hoverboard') {
+              playerMesh.userData.boardGroup.visible = false;
+            }
+          }
+        }
+      });
+
+      // Spawn new patterns ahead
+      nextSpawnZ += gameSpeed * dt;
+      while (nextSpawnZ > -145) {
+        const step = spawnPatternRow(nextSpawnZ);
+        nextSpawnZ -= step;
+      }
+
+      // Update Obstacles & Floor Support
+      let supportY = 0;
+      const playerHalfHeight = player.isRolling ? 0.85 : 2.1;
+      const targetX = LANES[player.lane];
+
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        const obs = obstacles[i];
+        const moveSpd = gameSpeed + (obs.speedOffset || 0);
+        obs.zCenter += moveSpd * dt;
+        obs.mesh.position.z = obs.zCenter;
+
+        // Patrol Drone horizontal oscillation
+        if (obs.patrol) {
+          obs.patrolPhase += dt * 2.6;
+          obs.mesh.position.x = LANES[obs.lane] + Math.sin(obs.patrolPhase) * 0.55;
+        }
+
+        const obsX = obs.mesh.position.x;
+        const sameLane = Math.abs(player.x - obsX) < 1.25;
+
+        if (obs.type === 'TRAIN') {
+          const trainFrontZ = obs.zCenter + obs.halfLength;
+          const trainBackZ = obs.zCenter - obs.halfLength;
+          const rampStartZ = trainFrontZ + (obs.rampLength || 0);
+
+          if (sameLane) {
+            // 1. Ramp zone in front of the train: smoothly elevates ground support
+            if (obs.hasRamp && 0 <= rampStartZ + 0.75 && 0 >= trainFrontZ - 0.5) {
+              const progress = THREE.MathUtils.clamp((rampStartZ - 0) / obs.rampLength, 0, 1);
+              const rampHeightAtPlayer = progress * obs.height;
+              if (player.y >= rampHeightAtPlayer - 1.15) {
+                supportY = Math.max(supportY, rampHeightAtPlayer);
+              }
+            }
+            // 2. Main train body: landing on roof, staying on roof, or jumping onto roof edge
+            else if (0 <= trainFrontZ + 0.45 && 0 >= trainBackZ - 0.55) {
+              const roofThreshold = obs.height - 1.25;
+              const isLandingFromAbove = player.vy <= 2 && player.y >= roofThreshold;
+              const isAlreadyOnRoof = player.y >= obs.height - 0.65;
+
+              if (isAlreadyOnRoof || isLandingFromAbove) {
+                supportY = Math.max(supportY, obs.height);
+              } else if (!activePowers.jetpack.active) {
+                if (activePowers.hoverboard.active) {
+                  handleHoverboardCrashSave(obs);
+                  break;
+                } else {
+                  endRun('Você colidiu de frente com um Servidor/Trem!');
+                  return;
+                }
+              }
+            }
+          }
+        } else {
+          const barFrontZ = obs.zCenter + obs.halfLength;
+          const barBackZ = obs.zCenter - obs.halfLength;
+          if (sameLane && 0 <= barFrontZ + 0.25 && 0 >= barBackZ - 0.25 && !activePowers.jetpack.active) {
+            const pBottom = player.y;
+            const pTop = player.y + playerHalfHeight;
+            const obsBottom = obs.minY || 0;
+            const obsTop = obs.height;
+            const hitsVertical = pBottom < obsTop - 0.12 && pTop > obsBottom + 0.12;
+
+            if (hitsVertical) {
+              if (activePowers.hoverboard.active) {
+                handleHoverboardCrashSave(obs);
+                break;
+              } else {
+                triggerStumble(obs.type === 'DRONE' ? 'Um Drone Patrulheiro interceptou você!' : 'Você bateu na barreira de Erro 404!');
+                if (gameState !== 'PLAYING') return;
+              }
+            }
+          }
+        }
+
+        if (obs.zCenter > 18) {
+          scene.remove(obs.mesh);
+          obstacles.splice(i, 1);
+        }
+      }
+
+      // Smooth Lateral Lane Interpolation & Vertical Physics
+      player.x = THREE.MathUtils.lerp(player.x, targetX, dt * 15);
+
+      if (activePowers.jetpack.active) {
+        player.groundY = 10.5;
+        player.y = THREE.MathUtils.lerp(player.y, 10.5, dt * 8);
+        player.vy = 0;
+        player.isJumping = false;
+      } else {
+        player.groundY = supportY;
+        // Snap smoothly onto a rising ramp or roof when descending/walking up
+        const climbingRamp = supportY > player.y && (supportY - player.y) < 1.1 && player.vy <= 4;
+        if (climbingRamp) {
+          player.y = THREE.MathUtils.lerp(player.y, supportY, dt * 24);
+          player.vy = 0;
+          player.isJumping = false;
+        } else if (player.y > player.groundY + 0.02 || player.vy > 0) {
+          player.vy -= 44 * dt;
+          player.y += player.vy * dt;
+          player.isJumping = true;
+          if (player.y <= player.groundY) {
+            player.y = player.groundY;
+            player.vy = 0;
+            player.isJumping = false;
+          }
+        } else {
+          player.y = THREE.MathUtils.lerp(player.y, player.groundY, dt * 18);
+          player.vy = 0;
+          player.isJumping = false;
+        }
+      }
+
+      if (player.isRolling) {
+        player.rollTimer -= dt;
+        if (player.rollTimer <= 0) {
+          player.isRolling = false;
+        }
+      }
+
+      // Apply Transform & Natural Articulated Limb Animations
+      playerMesh.position.set(player.x, player.y, 0);
+      playerMesh.rotation.y = 0;
+      playerMesh.visible = player.invulnTimer > 0 ? Math.floor(player.invulnTimer * 18) % 2 === 0 : true;
+
+      playerMesh.userData.shadowBlob.position.y = 0.03;
+      const heightAboveFloor = Math.max(0, player.y - player.groundY);
+      const shadowScale = Math.max(0.35, 1 - heightAboveFloor * 0.08);
+      playerMesh.userData.shadowBlob.scale.set(shadowScale, shadowScale, 1);
+
+      const rig = playerMesh.userData.rig;
+      const torsoGroup = playerMesh.userData.torsoGroup;
+      const headGroup = playerMesh.userData.headGroup;
+      const vxTilt = (targetX - player.x) * -0.18;
+      rig.rotation.z = vxTilt;
+
+      player.runCycle += dt * (gameSpeed * 0.62);
+      const cVal = player.runCycle;
+
+      if (player.isRolling) {
+        rig.scale.set(1.04, 0.56, 1.04);
+        rig.rotation.x = -0.78;
+        torsoGroup.rotation.x = 0.25;
+        headGroup.rotation.x = 0.35;
+        playerMesh.userData.leftLeg.rotation.x = 0.42;
+        playerMesh.userData.rightLeg.rotation.x = 0.25;
+        playerMesh.userData.leftKnee.rotation.x = -0.95;
+        playerMesh.userData.rightKnee.rotation.x = -0.75;
+        playerMesh.userData.leftArm.rotation.x = 0.65;
+        playerMesh.userData.rightArm.rotation.x = 0.65;
+        playerMesh.userData.leftElbow.rotation.x = -0.5;
+        playerMesh.userData.rightElbow.rotation.x = -0.5;
+      } else if (activePowers.jetpack.active) {
+        rig.scale.set(1, 1, 1);
+        rig.rotation.x = -0.88;
+        torsoGroup.rotation.x = 0.1;
+        headGroup.rotation.x = 0.65;
+        playerMesh.userData.leftLeg.rotation.x = 0.25 + Math.sin(cVal * 0.7) * 0.12;
+        playerMesh.userData.rightLeg.rotation.x = 0.42 - Math.sin(cVal * 0.7) * 0.12;
+        playerMesh.userData.leftKnee.rotation.x = -0.55;
+        playerMesh.userData.rightKnee.rotation.x = -0.75;
+        playerMesh.userData.leftArm.rotation.x = -2.45;
+        playerMesh.userData.rightArm.rotation.x = -2.45;
+        playerMesh.userData.leftElbow.rotation.x = -0.35;
+        playerMesh.userData.rightElbow.rotation.x = -0.35;
+      } else if (activePowers.hoverboard.active) {
+        // Surfer stance on hoverboard with dynamic balance & lean
+        rig.scale.set(1, 1, 1);
+        rig.rotation.x = 0;
+        torsoGroup.rotation.x = 0.14;
+        torsoGroup.rotation.y = -0.35;
+        headGroup.rotation.x = -0.08;
+        headGroup.rotation.y = 0.35;
+        playerMesh.userData.leftLeg.rotation.x = -0.28;
+        playerMesh.userData.rightLeg.rotation.x = 0.24;
+        playerMesh.userData.leftKnee.rotation.x = -0.38;
+        playerMesh.userData.rightKnee.rotation.x = -0.32;
+        playerMesh.userData.leftArm.rotation.x = -0.35;
+        playerMesh.userData.leftArm.rotation.z = 0.55;
+        playerMesh.userData.rightArm.rotation.x = 0.25;
+        playerMesh.userData.rightArm.rotation.z = -0.55;
+        playerMesh.userData.leftElbow.rotation.x = -0.45;
+        playerMesh.userData.rightElbow.rotation.x = -0.45;
+      } else if (player.isJumping) {
+        rig.scale.set(1, 1, 1);
+        rig.rotation.x = 0;
+        torsoGroup.rotation.x = 0.18;
+        headGroup.rotation.x = -0.14;
+        playerMesh.userData.leftLeg.rotation.x = -0.92;
+        playerMesh.userData.rightLeg.rotation.x = 0.55;
+        playerMesh.userData.leftKnee.rotation.x = -1.05;
+        playerMesh.userData.rightKnee.rotation.x = -0.45;
+        playerMesh.userData.leftArm.rotation.x = -1.05;
+        playerMesh.userData.rightArm.rotation.x = 0.75;
+        playerMesh.userData.leftElbow.rotation.x = -0.85;
+        playerMesh.userData.rightElbow.rotation.x = -0.55;
+      } else {
+        // Natural athletic running gait with knee lift, elbow bend & torso twist
+        rig.scale.set(1, 1, 1);
+        rig.rotation.x = 0;
+        const swing = Math.sin(cVal);
+        const opp = -swing;
+
+        torsoGroup.rotation.x = 0.22;
+        torsoGroup.rotation.y = swing * 0.14;
+        headGroup.rotation.x = -0.16;
+        headGroup.rotation.y = -swing * 0.06;
+        rig.position.y = Math.abs(Math.cos(cVal)) * 0.15;
+
+        playerMesh.userData.leftLeg.rotation.x = swing * 0.95;
+        playerMesh.userData.rightLeg.rotation.x = opp * 0.95;
+
+        // Knee bends backward as leg swings back or lifts high forward
+        playerMesh.userData.leftKnee.rotation.x = swing > 0 ? -swing * 0.45 : -Math.abs(swing) * 1.15;
+        playerMesh.userData.rightKnee.rotation.x = opp > 0 ? -opp * 0.45 : -Math.abs(opp) * 1.15;
+
+        playerMesh.userData.leftFoot.rotation.x = -swing * 0.25;
+        playerMesh.userData.rightFoot.rotation.x = -opp * 0.25;
+
+        playerMesh.userData.leftArm.rotation.x = opp * 0.88;
+        playerMesh.userData.rightArm.rotation.x = swing * 0.88;
+        playerMesh.userData.leftArm.rotation.z = 0.08;
+        playerMesh.userData.rightArm.rotation.z = -0.08;
+
+        playerMesh.userData.leftElbow.rotation.x = -0.65 - Math.max(0, -opp) * 0.45;
+        playerMesh.userData.rightElbow.rotation.x = -0.65 - Math.max(0, -swing) * 0.45;
+      }
+
+      if (activePowers.hoverboard.active) {
+        playerMesh.userData.boardGroup.rotation.y = Math.sin(performance.now() * 0.008) * 0.12;
+      }
+      if (activePowers.magnet.active) {
+        playerMesh.userData.magnetHalo.rotation.y += dt * 4;
+      }
+
+      // Update Chaser (Articulated Antivirus Agent + 4-Legged Cyber Watchdog)
+      chaser.distance = THREE.MathUtils.lerp(chaser.distance, chaser.targetDistance, dt * 0.42);
+      if (chaser.distance < 13.5) {
+        chaserMesh.visible = true;
+        chaser.runCycle += dt * (gameSpeed * 0.72);
+        const gCycle = chaser.runCycle;
+        const gSwing = Math.sin(gCycle);
+
+        chaserMesh.position.set(
+          THREE.MathUtils.lerp(chaserMesh.position.x, player.x, dt * 7),
+          0,
+          chaser.distance
+        );
+
+        chaserMesh.userData.agentTorso.rotation.x = 0.24;
+        chaserMesh.userData.agentTorso.rotation.y = gSwing * 0.14;
+        chaserMesh.userData.cape.rotation.x = 0.35 + Math.abs(Math.cos(gCycle)) * 0.25;
+
+        chaserMesh.userData.legL.rotation.x = gSwing * 0.95;
+        chaserMesh.userData.legR.rotation.x = -gSwing * 0.95;
+        chaserMesh.userData.aLegL.lower.rotation.x = gSwing > 0 ? -0.35 : -Math.abs(gSwing) * 1.05;
+        chaserMesh.userData.aLegR.lower.rotation.x = -gSwing > 0 ? -0.35 : -Math.abs(gSwing) * 1.05;
+
+        chaserMesh.userData.aArmL.upper.rotation.x = -gSwing * 0.85;
+        chaserMesh.userData.aArmR.upper.rotation.x = gSwing * 0.85;
+        chaserMesh.userData.aArmL.lower.rotation.x = -0.65;
+        chaserMesh.userData.aArmR.lower.rotation.x = -0.65;
+
+        // Canine gallop / trot for the 4-legged Cyber Watchdog
+        const dCycle = gCycle * 1.35;
+        const dA = Math.sin(dCycle);
+        const dB = Math.sin(dCycle + Math.PI * 0.65);
+        chaserMesh.userData.dog.position.y = Math.abs(Math.cos(dCycle)) * 0.18;
+        chaserMesh.userData.dogTorso.rotation.x = Math.PI / 2 + dA * 0.14;
+        chaserMesh.userData.dogHeadPivot.rotation.x = -dA * 0.18;
+        chaserMesh.userData.dogTail.rotation.z = Math.sin(dCycle * 2) * 0.45;
+
+        chaserMesh.userData.dLegFL.hip.rotation.x = dA * 0.78;
+        chaserMesh.userData.dLegFR.hip.rotation.x = dB * 0.78;
+        chaserMesh.userData.dLegBL.hip.rotation.x = -dA * 0.78;
+        chaserMesh.userData.dLegBR.hip.rotation.x = -dB * 0.78;
+
+        chaserMesh.userData.dLegFL.knee.rotation.x = Math.max(0, -dA) * 0.7;
+        chaserMesh.userData.dLegFR.knee.rotation.x = Math.max(0, -dB) * 0.7;
+        chaserMesh.userData.dLegBL.knee.rotation.x = Math.max(0, dA) * 0.7;
+        chaserMesh.userData.dLegBR.knee.rotation.x = Math.max(0, dB) * 0.7;
+      } else {
+        chaserMesh.visible = false;
+      }
+
+      // Update Bits & Magnet Attraction
+      const pCenter = new THREE.Vector3(player.x, player.y + 1.0, 0);
+      for (let i = coins.length - 1; i >= 0; i--) {
+        const c = coins[i];
+        c.mesh.position.z += gameSpeed * dt;
+        c.mesh.rotation.y += dt * 4.2;
+
+        if (activePowers.magnet.active && c.mesh.position.z > -32 && c.mesh.position.z < 4) {
+          c.mesh.position.lerp(pCenter, dt * 11);
+        }
+          if (c.mesh.position.distanceTo(pCenter) < 1.38) {
+          runCoins++;
+          saveData.totalBitsMined = (saveData.totalBitsMined || 0) + 1;
+          score += 15 * totalMult;
+          sound.playCoin(coinCombo);
+          trackMissionProgress('coins', 1);
+          if (coinCombo > 0 && coinCombo % 10 === 0) {
+            spawnFloatingPopup(c.mesh.position, `+1 BIT (${coinCombo}x)`, 'text-amber-300');
+          }
+          coinCombo++;
+          coinComboTimer = 0.85;
+          spawnBurst(c.mesh.position, 0xfacc15, 7, 0.65);
+          scene.remove(c.mesh);
+          coins.splice(i, 1);
+          continue;
+        }
+
+        if (c.mesh.position.z > 14) {
+          scene.remove(c.mesh);
+          coins.splice(i, 1);
+        }
+      }
+
+      // Update Powerup Pickups
+      for (let i = powerups.length - 1; i >= 0; i--) {
+        const p = powerups[i];
+        p.mesh.position.z += gameSpeed * dt;
+        p.mesh.rotation.y += dt * 2.8;
+        p.mesh.position.y += Math.sin(performance.now() * 0.006 + i) * 0.008;
+
+        if (p.mesh.position.distanceTo(pCenter) < 1.55) {
+          activatePowerup(p.type);
+          spawnFloatingPopup(p.mesh.position, 'MÓDULO ATIVO!', 'text-cyan-300');
+          spawnBurst(p.mesh.position, 0xffffff, 16, 1.1);
+          scene.remove(p.mesh);
+          powerups.splice(i, 1);
+          continue;
+        }
+
+        if (p.mesh.position.z > 14) {
+          scene.remove(p.mesh);
+          powerups.splice(i, 1);
+        }
+      }
+
+      // Update Specials (Mystery .ZIP Boxes & Word Hunt Letters)
+      for (let i = specials.length - 1; i >= 0; i--) {
+        const sp = specials[i];
+        sp.mesh.position.z += gameSpeed * dt;
+        sp.mesh.rotation.y += dt * 3.2;
+        sp.mesh.position.y = 1.15 + Math.sin(performance.now() * 0.007 + i) * 0.14;
+
+        if (sp.mesh.position.distanceTo(pCenter) < 1.55) {
+          if (sp.kind === 'ZIP') {
+            runZipBoxes++;
+            sound.playLootPickup();
+            spawnFloatingPopup(sp.mesh.position, '+1 PACOTE .ZIP!', 'text-purple-300');
+            spawnBurst(sp.mesh.position, 0xc084fc, 18, 1.2);
+            showToast('📦 PACOTE .ZIP CAPTURADO! Abra ao fim da corrida!');
+          } else if (sp.kind === 'LETTER') {
+            wordCollected[sp.letterIdx] = true;
+            sound.playLetter();
+            spawnFloatingPopup(sp.mesh.position, `LETRA "${sp.letter}"!`, 'text-cyan-300');
+            spawnBurst(sp.mesh.position, 0x38bdf8, 16, 1.1);
+            if (wordCollected.every(Boolean)) {
+              runCoins += 100;
+              saveData.totalBitsMined = (saveData.totalBitsMined || 0) + 100;
+              saveData.wordsCompleted = (saveData.wordsCompleted || 0) + 1;
+              score += 1000 * totalMult;
+              persistSaveData();
+              showToast(`🎉 PALAVRA "${currentWord}" COMPLETA! +100 BITS!`);
+              currentWord = WORDS_POOL[Math.floor(Math.random() * WORDS_POOL.length)];
+              wordCollected = currentWord.split('').map(() => false);
+            }
+          }
+          scene.remove(sp.mesh);
+          specials.splice(i, 1);
+          continue;
+        }
+
+        if (sp.mesh.position.z > 14) {
+          scene.remove(sp.mesh);
+          specials.splice(i, 1);
+        }
+      }
+
+      // Update Particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const pt = particles[i];
+        pt.life -= dt;
+        pt.mesh.position.addScaledVector(pt.vel, dt);
+        pt.vel.y -= 14 * dt;
+        const s = Math.max(0.01, pt.life / pt.maxLife);
+        pt.mesh.scale.set(s, s, s);
+        if (pt.life <= 0) {
+          scene.remove(pt.mesh);
+          particles.splice(i, 1);
+        }
+      }
+
+      // Dynamic Chase Camera
+      const camTargetX = player.x * 0.52;
+      const camTargetY = 5.8 + player.y * 0.58;
+      const camTargetZ = activePowers.jetpack.active ? 13.2 : 11.2;
+
+      camera.position.x = THREE.MathUtils.lerp(camera.position.x, camTargetX, dt * 7);
+      camera.position.y = THREE.MathUtils.lerp(camera.position.y, camTargetY, dt * 6);
+      camera.position.z = THREE.MathUtils.lerp(camera.position.z, camTargetZ, dt * 5);
+
+      if (cameraShake > 0) {
+        camera.position.x += (Math.random() - 0.5) * cameraShake;
+        camera.position.y += (Math.random() - 0.5) * cameraShake;
+        cameraShake = Math.max(0, cameraShake - dt * 2.8);
+      }
+
+      camera.lookAt(player.x * 0.35, 2.0 + player.y * 0.45, -10);
+
+      updateHUD(totalMult);
+    }
+
+    function animate(now) {
+      requestAnimationFrame(animate);
+      const dt = Math.min((now - lastTime) / 1000, 0.05);
+      lastTime = now;
+      updateGame(dt);
+      renderer.render(scene, camera);
+    }
+
+    // ----------------------------------------------------------------------------
+    // 13. UI & HUD CONTROLLERS (MODALS, SHOP, BOARDS, MISSIONS & LOOT CRATES)
+    // ----------------------------------------------------------------------------
+    const powerMeta = {
+      jetpack: { label: 'Overclock Fibra', icon: '🚀', color: 'from-cyan-500 to-blue-400' },
+      sneakers: { label: 'Botas Ping 0ms', icon: '⚡', color: 'from-emerald-500 to-lime-400' },
+      magnet: { label: 'Indexador Bits', icon: '🧲', color: 'from-sky-500 to-indigo-400' },
+      multiplier: { label: 'Dual-Core 2x', icon: '💎', color: 'from-purple-500 to-fuchsia-400' },
+      hoverboard: { label: 'Prancha Cyber', icon: '⌨️', color: 'from-emerald-400 to-cyan-400' }
+    };
+
+    function updateHUD(totalMult) {
+      document.getElementById('hud-score').textContent = String(Math.floor(score)).padStart(6, '0');
+      document.getElementById('hud-coins').textContent = runCoins;
+      document.getElementById('hud-multiplier').textContent = `x${totalMult}`;
+
+      // Word Hunt Pills
+      const wordBox = document.getElementById('hud-word-box');
+      wordBox.innerHTML = currentWord.split('').map((ch, idx) => {
+        const got = wordCollected[idx];
+        return `<span class="w-5 h-5 sm:w-6 sm:h-6 rounded-md flex items-center justify-center text-xs font-black ${got ? 'bg-cyan-400 text-slate-950' : 'bg-slate-800 text-slate-500'}">${ch}</span>`;
+      }).join('');
+
+      // Mystery ZIP Badge
+      const zipBadge = document.getElementById('hud-zip-badge');
+      if (runZipBoxes > 0) {
+        zipBadge.classList.remove('hidden');
+        zipBadge.classList.add('flex');
+        document.getElementById('hud-zip-count').textContent = runZipBoxes;
+      } else {
+        zipBadge.classList.add('hidden');
+      }
+
+      const bossHud = document.getElementById('hud-boss-wave');
+      const bossTimerEl = document.getElementById('hud-boss-timer');
+      if (bossHud && bossTimerEl) {
+        if (bossWaveActive) {
+          bossHud.classList.remove('hidden');
+          bossTimerEl.textContent = `${Math.max(1, Math.ceil(bossWaveTimer))}s`;
+        } else {
+          bossHud.classList.add('hidden');
+        }
+      }
+
+      const boardCfg = BOARDS_DATA.find(b => b.id === saveData.selectedBoard) || BOARDS_DATA[0];
+      document.getElementById('hud-board-icon').textContent = boardCfg.icon;
+      document.getElementById('hud-board-name').textContent = boardCfg.name;
+
+      const boardBtn = document.getElementById('btn-hoverboard-hud');
+      const boardBadge = document.getElementById('hud-board-count');
+      if (activePowers.hoverboard.active) {
+        boardBadge.textContent = `${Math.ceil(activePowers.hoverboard.time)}s`;
+        boardBtn.classList.add('ring-2', 'ring-yellow-300');
+      } else if (activePowers.hoverboard.cooldown > 0) {
+        boardBadge.textContent = `${Math.ceil(activePowers.hoverboard.cooldown)}s`;
+        boardBtn.classList.remove('ring-2', 'ring-yellow-300');
+      } else {
+        boardBadge.textContent = 'Pronta';
+        boardBtn.classList.remove('ring-2', 'ring-yellow-300');
+      }
+
+      const timersBox = document.getElementById('powerup-timers');
+      let html = '';
+      Object.keys(activePowers).forEach(key => {
+        const p = activePowers[key];
+        if (p.active) {
+          const pct = Math.max(0, Math.min(100, (p.time / p.maxTime) * 100));
+          const meta = powerMeta[key];
+          html += `
+            <div class="bg-slate-950/85 border border-white/20 rounded-xl px-3 py-1.5 backdrop-blur-sm shadow-md">
+              <div class="flex items-center justify-between text-xs font-bold text-white mb-1">
+                <span>${meta.icon} ${meta.label}</span>
+                <span>${p.time.toFixed(1)}s</span>
+              </div>
+              <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                <div class="h-full bg-gradient-to-r ${meta.color}" style="width: ${pct}%"></div>
+              </div>
+            </div>
+          `;
+        }
+      });
+      timersBox.innerHTML = html;
+    }
+
+    function refreshMenuStats() {
+      document.getElementById('menu-total-coins').textContent = saveData.coins.toLocaleString('pt-BR');
+      document.getElementById('menu-high-score').textContent = saveData.highScore.toLocaleString('pt-BR');
+      document.getElementById('menu-perm-mult').textContent = `x${saveData.permMultiplier || 1}`;
+      const selected = CHARACTERS_DATA.find(c => c.id === saveData.selectedChar) || CHARACTERS_DATA[0];
+      const board = BOARDS_DATA.find(b => b.id === saveData.selectedBoard) || BOARDS_DATA[0];
+      const zone = ZONES_DATA[startingZoneIdx] || ZONES_DATA[0];
+      document.getElementById('selected-char-badge').textContent = `Avatar: ${selected.name}`;
+      document.getElementById('selected-board-badge').textContent = `Prancha: ${board.name}`;
+      const zoneBtn = document.getElementById('btn-cycle-zone');
+      if (zoneBtn) zoneBtn.textContent = `🌐 Zona: ${zone.name}`;
+      document.getElementById('btn-audio').textContent = saveData.muted ? '🔇' : '🔊';
+
+      const trophyDot = document.getElementById('trophies-ready-dot');
+      if (trophyDot) {
+        if (hasClaimableTrophies()) trophyDot.classList.remove('hidden');
+        else trophyDot.classList.add('hidden');
+      }
+    }
+
+    function startNewRun() {
+      sound.playButton();
+      clearWorldEntities();
+
+      gameSpeed = BASE_SPEED;
+      score = 0;
+      runCoins = 0;
+      runZipBoxes = 0;
+      distanceRun = startingZoneIdx > 0 ? ZONES_DATA[startingZoneIdx].minDist : 0;
+      nextBossDistance = Math.max(BOSS_WAVE_INTERVAL, Math.ceil((distanceRun + 150) / BOSS_WAVE_INTERVAL) * BOSS_WAVE_INTERVAL);
+      bossWaveNumber = 0;
+      lastTrackedDist = distanceRun;
+      coinCombo = 0;
+      currentZoneIdx = startingZoneIdx;
+      const zb = document.getElementById('hud-zone-badge');
+      if (zb) zb.textContent = ZONES_DATA[currentZoneIdx].name;
+      recordTargetScore = saveData.highScore > 100 ? saveData.highScore : 0;
+      recordLinePassed = false;
+      recordLineGroup.visible = false;
+
+      currentWord = WORDS_POOL[Math.floor(Math.random() * WORDS_POOL.length)];
+      wordCollected = currentWord.split('').map(() => false);
+
+      player.lane = 1;
+      player.x = 0;
+      player.y = 0;
+      player.vy = 0;
+      player.groundY = 0;
+      player.isJumping = false;
+      player.isRolling = false;
+      player.rollTimer = 0;
+      player.invulnTimer = 0;
+      player.stumbleCooldown = 0;
+
+      chaser.distance = 2.5;
+      chaser.targetDistance = 15.5;
+
+      Object.keys(activePowers).forEach(k => {
+        activePowers[k].active = false;
+        activePowers[k].time = 0;
+        if (activePowers[k].cooldown !== undefined) activePowers[k].cooldown = 0;
+      });
+
+      playerMesh.userData.jetpackGroup.visible = false;
+      playerMesh.userData.boardGroup.visible = false;
+      playerMesh.userData.magnetHalo.visible = false;
+      playerMesh.userData.leftSuperSole.visible = false;
+      playerMesh.userData.rightSuperSole.visible = false;
+
+      nextSpawnZ = -38;
+      for (let i = 0; i < 6; i++) {
+        nextSpawnZ -= spawnPatternRow(nextSpawnZ);
+      }
+
+      document.getElementById('start-screen').classList.add('hidden');
+      document.getElementById('pause-screen').classList.add('hidden');
+      document.getElementById('gameover-screen').classList.add('hidden');
+      document.getElementById('hud').classList.remove('hidden');
+
+      gameState = 'PLAYING';
+      sound.startMusic();
+      showToast('🛡️ FUJA DO ANTIVÍRUS FIREWALL!');
+    }
+
+    function pauseGame() {
+      if (gameState !== 'PLAYING') return;
+      gameState = 'PAUSED';
+      sound.stopMusic();
+      sound.playButton();
+      document.getElementById('pause-screen').classList.remove('hidden');
+    }
+
+    function resumeGame() {
+      if (gameState !== 'PAUSED') return;
+      document.getElementById('pause-screen').classList.add('hidden');
+      sound.playButton();
+      gameState = 'PLAYING';
+      sound.startMusic();
+    }
+
+    function returnToMenu() {
+      gameState = 'MENU';
+      sound.stopMusic();
+      sound.playButton();
+      clearWorldEntities();
+      document.getElementById('hud').classList.add('hidden');
+      document.getElementById('pause-screen').classList.add('hidden');
+      document.getElementById('gameover-screen').classList.add('hidden');
+      document.getElementById('start-screen').classList.remove('hidden');
+      refreshMenuStats();
+    }
+
+    // Mystery .ZIP Loot Box Opener
+    document.getElementById('btn-open-loot').addEventListener('click', () => {
+      if (runZipBoxes <= 0) return;
+      runZipBoxes--;
+      sound.playPowerup();
+
+      const rewards = [
+        { text: '+150 BITS BÔNUS!', coins: 150 },
+        { text: '+300 BITS JACKPOT!', coins: 300 },
+        { text: '+500 BITS SUPER SERVIDOR!', coins: 500 }
+      ];
+      const prize = rewards[Math.floor(Math.random() * rewards.length)];
+      saveData.coins += prize.coins;
+      persistSaveData();
+
+      document.getElementById('go-loot-desc').innerHTML = `<span class="text-emerald-300 font-black">EXTRAÍDO: ${prize.text}</span>`;
+      document.getElementById('go-total-coins').textContent = `${saveData.coins.toLocaleString('pt-BR')} BITS`;
+      refreshMenuStats();
+
+      if (runZipBoxes <= 0) {
+        document.getElementById('btn-open-loot').disabled = true;
+        document.getElementById('btn-open-loot').textContent = 'Aberto!';
+        document.getElementById('go-loot-icon').classList.remove('animate-loot-shake');
+      } else {
+        document.getElementById('btn-open-loot').textContent = `Extrair (${runZipBoxes})`;
+      }
+    });
+
+    // Render Character Selector Cards
+    function renderCharactersModal() {
+      const list = document.getElementById('chars-list');
+      document.getElementById('chars-modal-coins').textContent = `${saveData.coins.toLocaleString('pt-BR')} BITS`;
+
+      list.innerHTML = CHARACTERS_DATA.map(char => {
+        const unlocked = saveData.unlockedChars.includes(char.id);
+        const selected = saveData.selectedChar === char.id;
+        const hexAccent = '#' + char.colors.accent.toString(16).padStart(6, '0');
+        const hexShirt = '#' + char.colors.shirt.toString(16).padStart(6, '0');
+
+        let btnHtml = '';
+        if (selected) {
+          btnHtml = `<button disabled class="w-full py-2 rounded-xl bg-emerald-400 text-slate-950 font-extrabold text-xs uppercase font-code">✓ Conectado</button>`;
+        } else if (unlocked) {
+          btnHtml = `<button onclick="selectCharacter('${char.id}')" class="btn-3d w-full py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-extrabold text-xs uppercase font-code">Selecionar</button>`;
+        } else {
+          const canAfford = saveData.coins >= char.cost;
+          btnHtml = `<button onclick="buyCharacter('${char.id}')" class="btn-3d w-full py-2 rounded-xl ${canAfford ? 'bg-amber-400 text-slate-950' : 'bg-slate-700 text-slate-400'} font-extrabold text-xs uppercase font-code">Desbloquear (${char.cost} BITS)</button>`;
+        }
+
+        return `
+          <div class="bg-slate-900/90 border-2 ${selected ? 'border-emerald-400' : 'border-white/15'} rounded-2xl p-3.5 flex flex-col justify-between text-center">
+            <div>
+              <div class="w-14 h-14 mx-auto mb-2 rounded-2xl flex items-center justify-center text-2xl shadow-inner border-2 border-white/25" style="background: linear-gradient(135deg, ${hexShirt}, ${hexAccent})">
+                👨‍💻
+              </div>
+              <span class="inline-block px-2 py-0.5 rounded-full bg-white/10 text-[10px] font-bold uppercase text-cyan-300 mb-1 font-code">${char.tag}</span>
+              <h4 class="font-extrabold text-base text-white">${char.name}</h4>
+              <p class="text-xs text-slate-300 mt-1 mb-3 leading-snug">${char.desc}</p>
+            </div>
+            ${btnHtml}
+          </div>
+        `;
+      }).join('');
+    }
+
+    window.selectCharacter = function(id) {
+      saveData.selectedChar = id;
+      persistSaveData();
+      rebuildPlayerCharacter(id);
+      sound.playPowerup();
+      renderCharactersModal();
+      refreshMenuStats();
+    };
+
+    window.buyCharacter = function(id) {
+      const char = CHARACTERS_DATA.find(c => c.id === id);
+      if (!char) return;
+      if (saveData.coins < char.cost) {
+        sound.playStumble();
+        showToast('Bits insuficientes!');
+        return;
+      }
+      saveData.coins -= char.cost;
+      saveData.unlockedChars.push(id);
+      saveData.selectedChar = id;
+      persistSaveData();
+      rebuildPlayerCharacter(id);
+      sound.playPowerup();
+      renderCharactersModal();
+      refreshMenuStats();
+      showToast(`🎉 Avatar ${char.name} desbloqueado!`);
+    };
+
+    // Render Hoverboards Showcase Modal
+    function renderBoardsModal() {
+      const list = document.getElementById('boards-list');
+      document.getElementById('boards-modal-coins').textContent = `${saveData.coins.toLocaleString('pt-BR')} BITS`;
+
+      list.innerHTML = BOARDS_DATA.map(board => {
+        const unlocked = saveData.unlockedBoards.includes(board.id);
+        const selected = saveData.selectedBoard === board.id;
+
+        let btnHtml = '';
+        if (selected) {
+          btnHtml = `<button disabled class="w-full py-2 rounded-xl bg-purple-400 text-slate-950 font-extrabold text-xs uppercase font-code">✓ Equipada</button>`;
+        } else if (unlocked) {
+          btnHtml = `<button onclick="selectBoard('${board.id}')" class="btn-3d w-full py-2 rounded-xl bg-cyan-400 text-slate-950 font-extrabold text-xs uppercase font-code">Equipar</button>`;
+        } else {
+          const canAfford = saveData.coins >= board.cost;
+          btnHtml = `<button onclick="buyBoard('${board.id}')" class="btn-3d w-full py-2 rounded-xl ${canAfford ? 'bg-amber-400 text-slate-950' : 'bg-slate-700 text-slate-400'} font-extrabold text-xs uppercase font-code">Comprar (${board.cost} BITS)</button>`;
+        }
+
+        return `
+          <div class="bg-slate-900/90 border-2 ${selected ? 'border-purple-400' : 'border-white/15'} rounded-2xl p-3.5 flex flex-col justify-between text-center">
+            <div>
+              <div class="w-14 h-14 mx-auto mb-2 rounded-2xl bg-slate-800 flex items-center justify-center text-3xl border-2 border-purple-400/40">
+                ${board.icon}
+              </div>
+              <span class="inline-block px-2 py-0.5 rounded-full bg-white/10 text-[10px] font-bold uppercase text-purple-300 mb-1 font-code">${board.tag} • ${board.duration}s</span>
+              <h4 class="font-extrabold text-base text-white">${board.name}</h4>
+              <p class="text-xs text-slate-300 mt-1 mb-3 leading-snug">${board.desc}</p>
+            </div>
+            ${btnHtml}
+          </div>
+        `;
+      }).join('');
+    }
+
+    window.selectBoard = function(id) {
+      saveData.selectedBoard = id;
+      persistSaveData();
+      rebuildPlayerCharacter(saveData.selectedChar);
+      sound.playPowerup();
+      renderBoardsModal();
+      refreshMenuStats();
+    };
+
+    window.buyBoard = function(id) {
+      const board = BOARDS_DATA.find(b => b.id === id);
+      if (!board) return;
+      if (saveData.coins < board.cost) {
+        sound.playStumble();
+        showToast('Bits insuficientes!');
+        return;
+      }
+      saveData.coins -= board.cost;
+      saveData.unlockedBoards.push(id);
+      saveData.selectedBoard = id;
+      persistSaveData();
+      rebuildPlayerCharacter(saveData.selectedChar);
+      sound.playPowerup();
+      renderBoardsModal();
+      refreshMenuStats();
+      showToast(`🛹 Prancha ${board.name} desbloqueada!`);
+    };
+
+    // Render Missions Modal
+    function renderMissionsModal() {
+      const list = document.getElementById('missions-list');
+      document.getElementById('missions-modal-mult').textContent = `x${saveData.permMultiplier || 1} / x10`;
+
+      list.innerHTML = saveData.missions.map(m => {
+        const pct = Math.min(100, Math.round((m.progress / m.target) * 100));
+        return `
+          <div class="bg-slate-900/90 border ${m.done ? 'border-emerald-400/60' : 'border-white/15'} rounded-2xl p-3.5">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="font-extrabold text-sm text-white">${m.done ? '✅' : '🎯'} ${m.text}</span>
+              <span class="text-xs font-bold font-code ${m.done ? 'text-emerald-300' : 'text-amber-300'}">${m.progress} / ${m.target}</span>
+            </div>
+            <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+              <div class="h-full bg-gradient-to-r ${m.done ? 'from-emerald-400 to-teal-300' : 'from-amber-400 to-orange-500'}" style="width: ${pct}%"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Render Power-Up Upgrades Shop
+    function renderShopModal() {
+      const list = document.getElementById('upgrades-list');
+      document.getElementById('shop-modal-coins').textContent = `${saveData.coins.toLocaleString('pt-BR')} BITS`;
+
+      list.innerHTML = UPGRADES_DATA.map(upg => {
+        const lvl = saveData.upgrades[upg.id] || 0;
+        const isMax = lvl >= upg.maxLevel;
+        const nextCost = isMax ? 0 : upg.costs[lvl];
+        const currentDur = (upg.baseDuration + lvl * upg.perLevel).toFixed(1);
+        const canAfford = !isMax && saveData.coins >= nextCost;
+
+        let bars = '';
+        for (let i = 0; i < upg.maxLevel; i++) {
+          bars += `<span class="flex-1 h-2 rounded-full ${i < lvl ? 'bg-emerald-400' : 'bg-slate-700'}"></span>`;
+        }
+
+        return `
+          <div class="bg-slate-900/90 border border-white/15 rounded-2xl p-3.5 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3 flex-1">
+              <div class="w-12 h-12 rounded-2xl bg-slate-800 border border-cyan-400/30 flex items-center justify-center text-2xl shrink-0">
+                ${upg.icon}
+              </div>
+              <div class="flex-1">
+                <div class="flex items-center justify-between">
+                  <h4 class="font-extrabold text-sm sm:text-base text-white">${upg.name}</h4>
+                  <span class="text-xs font-bold text-cyan-300 font-code">${currentDur}s</span>
+                </div>
+                <p class="text-xs text-slate-300 leading-tight mt-0.5">${upg.desc}</p>
+                <div class="flex gap-1 mt-2">${bars}</div>
+              </div>
+            </div>
+            <div class="shrink-0">
+              ${isMax
+                ? `<span class="px-3 py-2 rounded-xl bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 font-extrabold text-xs font-code">MÁX</span>`
+                : `<button onclick="buyUpgrade('${upg.id}')" class="btn-3d px-3.5 py-2.5 rounded-xl ${canAfford ? 'bg-amber-400 text-slate-950' : 'bg-slate-700 text-slate-400'} font-extrabold text-xs font-code">
+                    ${nextCost} BITS
+                   </button>`
+              }
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    window.buyUpgrade = function(id) {
+      const upg = UPGRADES_DATA.find(u => u.id === id);
+      const lvl = saveData.upgrades[id] || 0;
+      if (!upg || lvl >= upg.maxLevel) return;
+      const cost = upg.costs[lvl];
+      if (saveData.coins < cost) {
+        sound.playStumble();
+        showToast('Bits insuficientes!');
+        return;
+      }
+      saveData.coins -= cost;
+      saveData.upgrades[id] = lvl + 1;
+      persistSaveData();
+      sound.playPowerup();
+      renderShopModal();
+      refreshMenuStats();
+      showToast(`⚙️ ${upg.name} Nível ${lvl + 1}!`);
+    };
+
+    // Render Career Trophies Modal & Claim Rewards
+    function renderTrophiesModal() {
+      const list = document.getElementById('trophies-list');
+      document.getElementById('trophies-modal-coins').textContent = `${saveData.coins.toLocaleString('pt-BR')} BITS`;
+
+      list.innerHTML = TROPHIES_DATA.map(trophy => {
+        const prog = getTrophyProgress(trophy);
+        const pct = Math.min(100, Math.round((prog / trophy.target) * 100));
+        const unlocked = prog >= trophy.target;
+        const claimed = (saveData.claimedTrophies || []).includes(trophy.id);
+
+        let actionBtn = '';
+        if (claimed) {
+          actionBtn = `<span class="px-3 py-2 rounded-xl bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 font-extrabold text-xs font-code shrink-0">RESGATADO</span>`;
+        } else if (unlocked) {
+          actionBtn = `<button onclick="claimTrophy('${trophy.id}')" class="btn-3d px-3.5 py-2 rounded-xl bg-gradient-to-r from-yellow-400 to-amber-300 text-slate-950 font-black text-xs font-code shrink-0">+${trophy.reward} BITS</button>`;
+        } else {
+          actionBtn = `<span class="px-3 py-2 rounded-xl bg-slate-800 border border-white/10 text-slate-400 font-bold text-xs font-code shrink-0">+${trophy.reward}</span>`;
+        }
+
+        return `
+          <div class="bg-slate-900/90 border-2 ${claimed ? 'border-emerald-400/50' : (unlocked ? 'border-yellow-400' : 'border-white/15')} rounded-2xl p-3.5 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3 flex-1">
+              <div class="w-12 h-12 rounded-2xl bg-slate-800 border border-yellow-400/40 flex items-center justify-center text-2xl shrink-0">
+                ${trophy.badge}
+              </div>
+              <div class="flex-1">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <h4 class="font-extrabold text-sm sm:text-base text-white">${trophy.title}</h4>
+                  <span class="px-2 py-0.5 rounded-full bg-yellow-400/15 border border-yellow-400/35 text-[10px] font-bold text-yellow-300 font-code">${trophy.tier}</span>
+                </div>
+                <p class="text-xs text-slate-300 leading-tight mt-0.5">${trophy.desc}</p>
+                <div class="flex items-center justify-between text-[11px] font-code text-cyan-300 mt-1.5">
+                  <span>${prog.toLocaleString('pt-BR')} / ${trophy.target.toLocaleString('pt-BR')}</span>
+                  <span>${pct}%</span>
+                </div>
+                <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden mt-1">
+                  <div class="h-full bg-gradient-to-r ${claimed || unlocked ? 'from-yellow-400 to-emerald-400' : 'from-cyan-500 to-blue-400'}" style="width: ${pct}%"></div>
+                </div>
+              </div>
+            </div>
+            ${actionBtn}
+          </div>
+        `;
+      }).join('');
+    }
+
+    window.claimTrophy = function(id) {
+      const trophy = TROPHIES_DATA.find(t => t.id === id);
+      if (!trophy) return;
+      if ((saveData.claimedTrophies || []).includes(id)) return;
+      if (getTrophyProgress(trophy) < trophy.target) {
+        sound.playStumble();
+        showToast('Meta ainda não concluída!');
+        return;
+      }
+      saveData.claimedTrophies = [...(saveData.claimedTrophies || []), id];
+      saveData.coins += trophy.reward;
+      persistSaveData();
+      sound.playPowerup();
+      renderTrophiesModal();
+      refreshMenuStats();
+      showToast(`🏆 Troféu "${trophy.title}" resgatado! +${trophy.reward} BITS!`);
+    };
+
+    // Wire Up All UI Buttons
+    document.getElementById('btn-play').addEventListener('click', startNewRun);
+    document.getElementById('btn-cycle-zone').addEventListener('click', () => {
+      sound.playButton();
+      startingZoneIdx = (startingZoneIdx + 1) % ZONES_DATA.length;
+      currentZoneIdx = startingZoneIdx;
+      refreshMenuStats();
+      showToast(`🌐 Zona inicial: ${ZONES_DATA[startingZoneIdx].name}`);
+    });
+    document.getElementById('btn-play-again').addEventListener('click', startNewRun);
+    document.getElementById('btn-pause').addEventListener('click', pauseGame);
+    document.getElementById('btn-resume').addEventListener('click', resumeGame);
+    document.getElementById('btn-restart-pause').addEventListener('click', startNewRun);
+    document.getElementById('btn-home-pause').addEventListener('click', returnToMenu);
+    document.getElementById('btn-go-home').addEventListener('click', returnToMenu);
+    document.getElementById('btn-hoverboard-hud').addEventListener('click', activateHoverboard);
+
+    document.getElementById('btn-audio').addEventListener('click', () => {
+      sound.setMuted(!sound.muted);
+      sound.playButton();
+      refreshMenuStats();
+    });
+
+    document.getElementById('btn-open-chars').addEventListener('click', () => {
+      sound.playButton();
+      renderCharactersModal();
+      document.getElementById('chars-modal').classList.remove('hidden');
+    });
+    document.getElementById('btn-close-chars').addEventListener('click', () => {
+      sound.playButton();
+      document.getElementById('chars-modal').classList.add('hidden');
+    });
+
+    document.getElementById('btn-open-boards').addEventListener('click', () => {
+      sound.playButton();
+      renderBoardsModal();
+      document.getElementById('boards-modal').classList.remove('hidden');
+    });
+    document.getElementById('btn-close-boards').addEventListener('click', () => {
+      sound.playButton();
+      document.getElementById('boards-modal').classList.add('hidden');
+    });
+
+    const openMissionsHandler = () => {
+      sound.playButton();
+      renderMissionsModal();
+      document.getElementById('missions-modal').classList.remove('hidden');
+    };
+    document.getElementById('btn-open-missions').addEventListener('click', openMissionsHandler);
+    document.getElementById('btn-go-missions').addEventListener('click', openMissionsHandler);
+    document.getElementById('btn-close-missions').addEventListener('click', () => {
+      sound.playButton();
+      document.getElementById('missions-modal').classList.add('hidden');
+    });
+
+    const openShopHandler = () => {
+      sound.playButton();
+      renderShopModal();
+      document.getElementById('shop-modal').classList.remove('hidden');
+    };
+    document.getElementById('btn-open-shop').addEventListener('click', openShopHandler);
+    document.getElementById('btn-go-shop').addEventListener('click', openShopHandler);
+    document.getElementById('btn-close-shop').addEventListener('click', () => {
+      sound.playButton();
+      document.getElementById('shop-modal').classList.add('hidden');
+    });
+
+    document.getElementById('btn-open-trophies').addEventListener('click', () => {
+      sound.playButton();
+      renderTrophiesModal();
+      document.getElementById('trophies-modal').classList.remove('hidden');
+    });
+    document.getElementById('btn-close-trophies').addEventListener('click', () => {
+      sound.playButton();
+      document.getElementById('trophies-modal').classList.add('hidden');
+    });
+
+    // Responsive Resize Handler
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Initialize UI & Start Animation Loop on Window Load
+    window.onload = function() {
+      refreshMenuStats();
+      lastTime = performance.now();
+      requestAnimationFrame(animate);
+    };
+  </script>
+</body>
+</html>
